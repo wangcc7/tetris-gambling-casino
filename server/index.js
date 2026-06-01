@@ -249,7 +249,7 @@ async function initMysqlSchema() {
       nickname VARCHAR(32) NOT NULL,
       coins INT NOT NULL DEFAULT 1000,
       score INT NOT NULL DEFAULT 0,
-      lines INT NOT NULL DEFAULT 0,
+      line_count INT NOT NULL DEFAULT 0,
       shields INT NOT NULL DEFAULT 0,
       status VARCHAR(16) NOT NULL DEFAULT 'active',
       role VARCHAR(16) NOT NULL DEFAULT 'player',
@@ -324,7 +324,7 @@ function dbUserToPlayer(row, positions = []) {
     lastSeenAt: row.last_login_at || row.updated_at,
     coins: row.coins,
     score: row.score,
-    lines: row.lines,
+    lines: row.line_count,
     shields: row.shields,
     harvested: 0,
     positions,
@@ -368,7 +368,7 @@ async function getUserById(userId) {
 async function saveDbPlayer(player) {
   if (!dbReady || !player?.userId) return;
   await db.query(`
-    UPDATE users SET nickname=?, coins=?, score=?, lines=?, shields=?, status=?, titles_json=?, inventory_json=?, stats_json=?
+    UPDATE users SET nickname=?, coins=?, score=?, line_count=?, shields=?, status=?, titles_json=?, inventory_json=?, stats_json=?
     WHERE id=?
   `, [
     player.name,
@@ -964,7 +964,7 @@ async function adminAction(action, payload) {
     if (dbReady && payload.playerId) {
       const id = String(payload.playerId).replace(/^u-/, "");
       await db.query("DELETE FROM user_positions WHERE user_id = ?", [id]);
-      await db.query("UPDATE users SET coins=?, score=0, `lines`=0, shields=0, titles_json=?, inventory_json=?, stats_json=? WHERE id=?", [
+      await db.query("UPDATE users SET coins=?, score=0, line_count=0, shields=0, titles_json=?, inventory_json=?, stats_json=? WHERE id=?", [
         state.economy.initialCoins,
         JSON.stringify(["交易城居民"]),
         JSON.stringify({ luckyBlocks: 0, skins: [] }),
