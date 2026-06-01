@@ -11,6 +11,10 @@ async function render() {
     <div><span>被收割</span><strong>${money(state.player.harvested)}</strong></div>
   `;
   document.querySelector("#titles").innerHTML = state.player.titles.map((title) => `<b>${escapeHtml(title)}</b>`).join("");
+  document.querySelector("#inventory").innerHTML = `
+    <div class="asset-row"><b>暴击幸运块</b><span>下一局加成道具</span><em>${money(state.player.inventory?.luckyBlocks || 0)}</em></div>
+    <div class="asset-row"><b>皮肤券</b><span>${escapeHtml((state.player.inventory?.skins || []).join("、") || "暂无")}</span><em>${(state.player.inventory?.skins || []).length}</em></div>
+  `;
   document.querySelector("#positions").innerHTML = state.player.positions.length
     ? state.player.positions.map((p) => `<div class="asset-row"><b>${escapeHtml(p.code)}</b><span>${escapeHtml(p.type)}</span><em>${money(p.cost)}</em></div>`).join("")
     : `<p class="muted">暂无股票或期货持仓。</p>`;

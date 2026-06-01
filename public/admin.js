@@ -69,5 +69,7 @@ $("#rageOn").addEventListener("click", () => {
   rage = !rage;
   action("rage", { enabled: rage });
 });
+$("#worldEvent").addEventListener("click", () => action("worldEvent"));
+$("#saveState").addEventListener("click", () => action("save"));
 
 setInterval(refresh, 3000);

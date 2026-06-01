@@ -15,10 +15,12 @@
 - 方块战场：标准 10x20 俄罗斯方块、7 种属性方块、金币浮窗、战场事件
 - 交易市场：模拟 A 股、期货开仓、玩家持仓、市场事件
 - 公会系统：公会广场、创建/加入公会、公会 BOSS、公会战入口
+- 活动中心：每日任务、柜台商店、限时活动、存档状态
 - 排行榜：韭菜王者、赌神榜、暴发户榜、黑奴榜
 - 聊天室：全局聊天、红包、AI NPC 阵容
 - 玩家资产：昵称、签到、金币、称号、股票/期货持仓
-- 后台控制台：股票/期货操控、胜率参数、通胀参数、玩家金币、危险事件
+- 后台控制台：股票/期货操控、胜率参数、通胀参数、玩家金币、危险事件、世界事件、手动保存
+- JSON 存档持久化：账号、玩家资产、持仓、聊天、行情、公会和世界事件会保存到 `data/state.json`
 - Docker 容器化部署：玩家端监听 `8080`，后台监听 `18052`
 
 ## 项目结构
@@ -31,6 +33,7 @@
 ├── public
 │   ├── admin.html
 │   ├── admin.js
+│   ├── activities.html
 │   ├── app.js              # 方块战场引擎
 │   ├── chat.html
 │   ├── game.html
@@ -57,6 +60,7 @@
 ├── 方块战场 /game.html
 ├── 交易市场 /market.html
 ├── 公会 /guilds.html
+├── 活动 /activities.html
 ├── 排行 /rankings.html
 ├── 聊天 /chat.html
 └── 资产 /profile.html
@@ -69,6 +73,7 @@
 ├── tetris：消行结算、属性奖励、战场事件
 ├── market：股票、期货、庄家控盘、市场事件
 ├── guild：公会、公会 BOSS、公会战
+├── activity：每日任务、柜台商店、限时活动
 ├── chat：全局消息、红包、NPC 自动发言
 ├── ranking：每日/每周排行榜
 └── admin：庄家控制台、危险操作、经济调控
@@ -76,7 +81,7 @@
 
 ## 下一阶段建议
 
-1. 接入持久化数据库，把当前内存状态迁移到 SQLite/PostgreSQL。
+1. 把当前 JSON 存档升级为 SQLite/PostgreSQL。
 2. 加 WebSocket，让行情、聊天、PVP 干扰和全服事件实时推送。
 3. 把俄罗斯方块战场拆成单人、PVP、公会 BOSS 三种模式。
 4. 后台细化权限和操作日志，危险操作做二次确认与回滚记录。
@@ -117,3 +122,4 @@ docker logs --tail=100 tetris-gambling-casino
 - 服务器 Docker Compose 版本较旧，`docker-compose.yml` 使用 `version: "2.2"`。
 - Docker 基础镜像使用华为云镜像源，避免服务器直连 Docker Hub 超时。
 - 前端已兼容普通 HTTP 环境，避免 `crypto.randomUUID()` 在非安全上下文不可用导致页面脚本中断。
+- `docker-compose.yml` 会把服务器项目目录下的 `data/` 挂载到容器 `/app/data`，用于保存运行状态。

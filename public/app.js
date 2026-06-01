@@ -263,9 +263,9 @@ function rotateCurrent() {
   }
 }
 
-function resetGame(startNow = false) {
+function resetGame(startNow = false, forceType = null) {
   grid = emptyGrid();
-  current = makePiece();
+  current = makePiece(forceType);
   next = makePiece();
   running = startNow;
   paused = false;
@@ -275,12 +275,22 @@ function resetGame(startNow = false) {
   toast(startNow ? "方块战场已开局" : "点击开始，进入方块战场");
 }
 
-function startGame() {
-  if (gameOver) resetGame(true);
+async function startGame() {
+  let forceType = null;
+  if (!running && localPlayer.inventory && localPlayer.inventory.luckyBlocks > 0) {
+    try {
+      const data = await post("/api/item/use", { playerId, itemId: "lucky_crit" });
+      localPlayer = data.player;
+      forceType = data.effect.forcePiece;
+    } catch {
+      forceType = null;
+    }
+  }
+  if (gameOver || forceType) resetGame(false, forceType);
   running = true;
   paused = false;
   syncHud();
-  toast("方块战场已开局");
+  toast(forceType ? "暴击幸运块生效：长条进场" : "方块战场已开局");
 }
 
 function syncHud() {

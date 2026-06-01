@@ -18,6 +18,12 @@ async function render() {
   document.querySelector("#dailyRanks").innerHTML = state.leaderboards.daily.slice(0, 5).map((item, index) => `
     <li><b>${index + 1}</b><span>${escapeHtml(item.name)}</span><em>${money(item.value)}</em></li>
   `).join("");
+  document.querySelector("#missionPreview").innerHTML = state.missions.slice(0, 3).map((mission) => `
+    <article class="mission-card ${mission.done ? "done" : ""}">
+      <div><b>${escapeHtml(mission.title)}</b><span>${mission.value}/${mission.target}</span></div>
+      <small>${mission.claimed ? "已领取" : mission.done ? "可领取" : "进行中"}</small>
+    </article>
+  `).join("");
 }
 
 startPage(render);

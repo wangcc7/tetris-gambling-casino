@@ -5,6 +5,8 @@ const crypto = require("crypto");
 
 const root = path.join(__dirname, "..");
 const publicDir = path.join(root, "public");
+const dataDir = path.join(root, "data");
+const stateFile = path.join(dataDir, "state.json");
 const playerPort = Number(process.env.PLAYER_PORT || 8080);
 const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
@@ -67,6 +69,27 @@ const marketEvents = [
   "黑色星期一预警：高控盘股票散户热度过高时容易跳水",
   "政策利好传闻：白酒板块有 NPC 正在喊单",
   "交易所故障演练：后续将加入限时无法卖出事件"
+];
+
+const missionTemplates = [
+  { id: "signin", title: "户籍柜台签到", desc: "完成一次每日签到", metric: "signin", target: 1, reward: 120 },
+  { id: "clear_10", title: "清理十行矿渣", desc: "在方块战场累计消除 10 行", metric: "lines", target: 10, reward: 180 },
+  { id: "speak_world", title: "广播台露脸", desc: "在任意频道发言 1 次", metric: "chat", target: 1, reward: 80 },
+  { id: "open_trade", title: "柜台第一单", desc: "完成 1 次股票或期货交易", metric: "trades", target: 1, reward: 160 },
+  { id: "guild_action", title: "抱团取暖", desc: "创建或加入 1 个公会", metric: "guildActions", target: 1, reward: 220 }
+];
+
+const shopItems = [
+  { id: "lucky_crit", name: "暴击幸运块", desc: "下一局开局强制获得暴击长条", price: 200, type: "buff" },
+  { id: "shield_pack", name: "铁壁护盾包", desc: "立即获得 1 个护盾", price: 300, type: "shield" },
+  { id: "rumor_ticket", name: "内幕小纸条", desc: "向市场事件池投放一条传闻", price: 150, type: "rumor" },
+  { id: "sickle_skin", name: "镰刀皮肤券", desc: "获得称号：镰刀试用员", price: 888, type: "title" }
+];
+
+const campaigns = [
+  { id: "boss-night", title: "巨大化方块 BOSS", time: "每日 20:00-20:15", reward: "公会金库与成员金币", status: "预热中" },
+  { id: "saturday-war", title: "周六公会战", time: "每周六 20:00", reward: "败方报名费奖池", status: "报名中" },
+  { id: "leek-day", title: "韭菜日警报", time: "后台触发", reward: "庄家池膨胀，排行榜洗牌", status: "危险" }
 ];
 
 const state = {
@@ -196,6 +219,9 @@ function ensurePlayer(id) {
       harvested: 0,
       positions: [],
       titles: ["新晋韭菜"],
+      inventory: { luckyBlocks: 0, skins: [] },
+      stats: { chat: 0, trades: 0, guildActions: 0, signin: 0 },
+      claimedMissions: {},
       account: null,
       guildId: null,
       lastSignin: null,
@@ -204,7 +230,114 @@ function ensurePlayer(id) {
     };
     pushMessage("极乐广播台", `${state.players[id].name} 进入交易城，初始铸币额度 ${state.economy.initialCoins}`, "system");
   }
-  return state.players[id];
+  return normalizePlayer(state.players[id]);
+}
+
+function normalizePlayer(player) {
+  player.positions ||= [];
+  player.titles ||= ["新晋韭菜"];
+  player.inventory ||= { luckyBlocks: 0, skins: [] };
+  player.inventory.skins ||= [];
+  player.stats ||= { chat: 0, trades: 0, guildActions: 0, signin: 0 };
+  player.stats.chat ||= 0;
+  player.stats.trades ||= 0;
+  player.stats.guildActions ||= 0;
+  player.stats.signin ||= 0;
+  player.claimedMissions ||= {};
+  player.shields ||= 0;
+  player.harvested ||= 0;
+  return player;
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadPersistedState() {
+  try {
+    if (!fs.existsSync(stateFile)) return;
+    const saved = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+    for (const key of ["bankerPool", "lossTarget", "inflation", "players", "accounts", "messages", "announcements", "guilds", "marketEvents", "guildBoss", "guildWar", "economy", "flags"]) {
+      if (saved[key] !== undefined) state[key] = saved[key];
+    }
+    if (Array.isArray(saved.stocks)) state.stocks = saved.stocks;
+    if (Array.isArray(saved.futures)) state.futures = saved.futures;
+    for (const player of Object.values(state.players)) normalizePlayer(player);
+    state.flags.nextEventAt = Date.now() + 30000;
+    console.log(`Loaded persisted state from ${stateFile}`);
+  } catch (error) {
+    console.error("Failed to load persisted state", error);
+  }
+}
+
+function saveState() {
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(stateFile, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      bankerPool: state.bankerPool,
+      lossTarget: state.lossTarget,
+      inflation: state.inflation,
+      players: state.players,
+      accounts: state.accounts,
+      messages: state.messages,
+      announcements: state.announcements,
+      stocks: state.stocks,
+      futures: state.futures,
+      guilds: state.guilds,
+      marketEvents: state.marketEvents,
+      guildBoss: state.guildBoss,
+      guildWar: state.guildWar,
+      economy: state.economy,
+      flags: state.flags
+    }, null, 2));
+  } catch (error) {
+    console.error("Failed to save state", error);
+  }
+}
+
+function missionsFor(player) {
+  const claimed = new Set(player.claimedMissions[todayKey()] || []);
+  return missionTemplates.map((mission) => {
+    const value = mission.metric === "lines" ? player.lines : Number(player.stats[mission.metric] || 0);
+    const done = value >= mission.target;
+    return { ...mission, value, done, claimed: claimed.has(mission.id) };
+  });
+}
+
+function claimMission(player, missionId) {
+  const mission = missionsFor(player).find((item) => item.id === missionId);
+  if (!mission) return { ok: false, error: "任务不存在" };
+  if (!mission.done) return { ok: false, error: "任务未完成" };
+  const day = todayKey();
+  player.claimedMissions[day] ||= [];
+  if (player.claimedMissions[day].includes(mission.id)) return { ok: false, error: "奖励已领取" };
+  player.claimedMissions[day].push(mission.id);
+  player.coins += mission.reward;
+  pushMessage("任务柜台", `${player.name} 领取任务奖励 ${mission.reward} 金币：${mission.title}`, "event", "世界");
+  return { ok: true, player, mission };
+}
+
+function buyShopItem(player, itemId) {
+  const item = shopItems.find((entry) => entry.id === itemId);
+  if (!item) return { ok: false, error: "商品不存在" };
+  if (player.coins < item.price) return { ok: false, error: "金币不足" };
+  player.coins -= item.price;
+  if (item.type === "shield") player.shields += 1;
+  if (item.type === "buff") player.inventory.luckyBlocks += 1;
+  if (item.type === "rumor") state.marketEvents.unshift(`${player.name} 投放传闻：TETRIS 指数将有异动`);
+  if (item.type === "title" && !player.titles.includes("镰刀试用员")) player.titles.push("镰刀试用员");
+  pushMessage("商店柜台", `${player.name} 购买了 ${item.name}`, "event", "世界");
+  return { ok: true, player, item };
+}
+
+function useItem(player, itemId) {
+  if (itemId === "lucky_crit" && player.inventory.luckyBlocks > 0) {
+    player.inventory.luckyBlocks -= 1;
+    pushMessage("战场柜台", `${player.name} 消耗暴击幸运块，下一局长条优先`, "event", "战场");
+    return { ok: true, player, effect: { forcePiece: "I" } };
+  }
+  return { ok: false, error: "道具不可用" };
 }
 
 function registerAccount(username, password, displayName) {
@@ -261,7 +394,11 @@ function snapshot(playerId) {
     guildWar: state.guildWar,
     marketEvents: state.marketEvents,
     npcs,
+    missions: playerId ? missionsFor(player) : missionTemplates,
+    shop: shopItems,
+    campaigns,
     leaderboards: leaderboards(),
+    persistence: { enabled: true, stateFile: "/app/data/state.json" },
     economy: state.economy,
     nextEventIn: Math.max(0, state.flags.nextEventAt - Date.now()),
     onlinePlayers: state.onlinePlayers
@@ -389,6 +526,8 @@ function adminAction(action, payload) {
     state.flags.rageMode = Boolean(payload.enabled);
     pushMessage("危险操作", `庄家狂暴模式：${state.flags.rageMode ? "开启" : "关闭"}`, "danger", "后台");
   }
+  if (action === "worldEvent") triggerWorldEvent();
+  if (action === "save") saveState();
 }
 
 function tradeStock(player, code, lots) {
@@ -447,6 +586,7 @@ async function api(req, res) {
     if (player.lastSignin !== today) {
       player.coins += 500;
       player.lastSignin = today;
+      player.stats.signin += 1;
       pushMessage("极乐广播台", `${player.name} 每日签到领取 500 金币`, "system", "世界");
     }
     return sendJson(res, { player });
@@ -455,6 +595,7 @@ async function api(req, res) {
     const body = await readBody(req);
     const player = ensurePlayer(body.playerId);
     if (state.flags.globalMuted) return sendJson(res, { ok: false, error: "全局禁言中" }, 403);
+    player.stats.chat += 1;
     pushMessage(player.name, String(body.text || "").slice(0, 120), "chat", String(body.channel || "世界").slice(0, 12));
     return sendJson(res, { ok: true, messages: state.messages });
   }
@@ -470,12 +611,16 @@ async function api(req, res) {
   }
   if (url.pathname === "/api/trade/stock" && req.method === "POST") {
     const body = await readBody(req);
-    const result = tradeStock(ensurePlayer(body.playerId), body.code, body.lots);
+    const player = ensurePlayer(body.playerId);
+    const result = tradeStock(player, body.code, body.lots);
+    if (result.ok) player.stats.trades += 1;
     return sendJson(res, result, result.ok ? 200 : 400);
   }
   if (url.pathname === "/api/trade/future" && req.method === "POST") {
     const body = await readBody(req);
-    const result = openFuture(ensurePlayer(body.playerId), body.code, body.side, body.leverage);
+    const player = ensurePlayer(body.playerId);
+    const result = openFuture(player, body.code, body.side, body.leverage);
+    if (result.ok) player.stats.trades += 1;
     return sendJson(res, result, result.ok ? 200 : 400);
   }
   if (url.pathname === "/api/guild/create" && req.method === "POST") {
@@ -486,6 +631,7 @@ async function api(req, res) {
       const guild = { id: `g-${crypto.randomUUID().slice(0, 8)}`, name: String(body.name || "新公会").slice(0, 16), level: 1, members: 1, treasury: 1000 };
       state.guilds.unshift(guild);
       player.guildId = guild.id;
+      player.stats.guildActions += 1;
       pushMessage("公会柜台", `${player.name} 创建了公会 ${guild.name}`, "event", "公会");
       return sendJson(res, { ok: true, guild, player });
     }
@@ -498,9 +644,25 @@ async function api(req, res) {
     if (guild) {
       guild.members = Math.min(50, guild.members + 1);
       player.guildId = guild.id;
+      player.stats.guildActions += 1;
       pushMessage("公会柜台", `${player.name} 加入了 ${guild.name}`, "event", "公会");
     }
     return sendJson(res, { ok: Boolean(guild), guild, player });
+  }
+  if (url.pathname === "/api/missions/claim" && req.method === "POST") {
+    const body = await readBody(req);
+    const result = claimMission(ensurePlayer(body.playerId), body.missionId);
+    return sendJson(res, result, result.ok ? 200 : 400);
+  }
+  if (url.pathname === "/api/shop/buy" && req.method === "POST") {
+    const body = await readBody(req);
+    const result = buyShopItem(ensurePlayer(body.playerId), body.itemId);
+    return sendJson(res, result, result.ok ? 200 : 400);
+  }
+  if (url.pathname === "/api/item/use" && req.method === "POST") {
+    const body = await readBody(req);
+    const result = useItem(ensurePlayer(body.playerId), body.itemId);
+    return sendJson(res, result, result.ok ? 200 : 400);
   }
   res.writeHead(404);
   res.end("Not found");
@@ -534,6 +696,8 @@ async function admin(req, res) {
   serveFile(req, res, "admin.html");
 }
 
+loadPersistedState();
+
 http.createServer((req, res) => {
   if (req.url.startsWith("/api/")) return api(req, res);
   serveFile(req, res, "index.html");
@@ -555,5 +719,15 @@ setInterval(() => {
 setInterval(() => {
   if (Date.now() >= state.flags.nextEventAt) triggerWorldEvent();
 }, 1000);
+setInterval(saveState, 5000);
 
-pushMessage("极乐广播台", "极乐交易城开盘：金币无真实价值，但每一次翻盘都算数。", "system", "世界");
+if (state.messages.length === 0) {
+  pushMessage("极乐广播台", "极乐交易城开盘：金币无真实价值，但每一次翻盘都算数。", "system", "世界");
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    saveState();
+    process.exit(0);
+  });
+}

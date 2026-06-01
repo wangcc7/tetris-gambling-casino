@@ -13,3 +13,5 @@ services:
       ADMIN_PORT: 18052
       ADMIN_USER: root
       ADMIN_PASSWORD: gambleMaster666
+    volumes:
+      - ./data:/app/data

@@ -2,12 +2,13 @@
 <html lang="zh-CN">
   <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>我的资产</title><link rel="stylesheet" href="/styles.css"></head>
   <body>
-    <header class="game-header"><a class="brand" href="/index.html">俄罗斯方块 · 极乐赌场</a><nav class="main-nav"><a data-nav href="/index.html">大厅</a><a data-nav href="/game.html">方块战场</a><a data-nav href="/market.html">交易市场</a><a data-nav href="/guilds.html">公会</a><a data-nav href="/rankings.html">排行</a><a data-nav href="/chat.html">聊天</a><a data-nav href="/profile.html">资产</a></nav><div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div></header>
+    <header class="game-header"><a class="brand" href="/index.html">极乐交易城</a><nav class="main-nav"><a data-nav href="/index.html">大厅</a><a data-nav href="/game.html">方块战场</a><a data-nav href="/market.html">交易市场</a><a data-nav href="/guilds.html">公会</a><a data-nav href="/activities.html">活动</a><a data-nav href="/rankings.html">排行</a><a data-nav href="/chat.html">聊天</a><a data-nav href="/profile.html">资产</a></nav><div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div></header>
     <main class="page-shell two-col">
       <section class="panel"><h1>玩家资产</h1><div class="inline-form"><input id="profileName" maxlength="16"><button id="saveProfile">保存昵称</button><button id="dailySign">每日签到</button></div><div id="assetStats" class="stat-grid wide"></div><p id="eventTicker" data-toast class="muted">资产同步中...</p></section>
       <section class="panel"><h2>称号</h2><div id="titles" class="legend"></div></section>
+      <section class="panel"><h2>库存</h2><div id="inventory" class="asset-list"></div></section>
       <section class="panel"><h2>持仓</h2><div id="positions"></div></section>
-      <section class="panel"><h2>成长路线</h2><p class="muted">后续会在这里接入皮肤、NFT/实体兑换券、战绩曲线和公会贡献。</p></section>
+      <section class="panel"><h2>成长路线</h2><p class="muted">活动中心已经接入每日任务、柜台商店和限时活动，后续会继续接入战绩曲线和公会贡献。</p></section>
     </main>
     <script type="module" src="/js/profile.js"></script>
   </body>

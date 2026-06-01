@@ -63,6 +63,12 @@ body {
   white-space: nowrap;
 }
 
+.block-link {
+  display: block;
+  margin-top: 10px;
+  text-align: center;
+}
+
 .main-nav a.active,
 .primary-link {
   background: #2f7df6;
@@ -213,7 +219,11 @@ body {
 
 .guild-list,
 .npc-list,
-.event-list {
+.event-list,
+.mission-list,
+.shop-list,
+.campaign-list,
+.asset-list {
   display: grid;
   gap: 10px;
 }
@@ -235,6 +245,41 @@ body {
   background: #151922;
   border-left: 3px solid var(--gold);
   border-radius: 6px;
+}
+
+.mission-card,
+.shop-card,
+.campaign-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: #151922;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.mission-card.done {
+  border-color: color-mix(in srgb, var(--green) 55%, var(--line));
+}
+
+.mission-card span,
+.shop-card span,
+.campaign-card span,
+.mission-card small,
+.shop-card small,
+.campaign-card small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.mission-card button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+  background: #303543;
+  border-color: var(--line);
 }
 
 .event-list span {
