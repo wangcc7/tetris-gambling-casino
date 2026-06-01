@@ -31,6 +31,20 @@ const attrs = {
   Z: { tag: "bomb", label: "爆", color: "#ff5c6c" }
 };
 
+const specialModifiers = {
+  rewind: { name: "时间倒流", label: "时", color: "#d6f7ff", desc: "消行后棋盘回退到数步前，但奖励保留" },
+  pendulum: { name: "钟摆", label: "摆", color: "#ffe08a", desc: "落地前会左右摆动 1 秒" },
+  curse: { name: "诅咒", label: "咒", color: "#f06aff", desc: "所在满行必须一次消除 2 行以上才会真正清掉" }
+};
+
+const modeNames = {
+  standard: "昼夜标准",
+  timed: "60秒限时",
+  precision: "精准刻度",
+  survival: "倒计时生存",
+  rhythm: "节拍坠落"
+};
+
 let grid = emptyGrid();
 let current = makePiece();
 let next = makePiece();
@@ -42,6 +56,19 @@ let dropInterval = 820;
 let goldFloat = null;
 let gameOver = false;
 let localPlayer = { coins: 1000, score: 0, lines: 0, shields: 0, name: "玩家" };
+let history = [];
+let zhongyuan = 0;
+let dying = false;
+let dyingLocks = 0;
+let gameMode = "standard";
+let modeStartedAt = 0;
+let modeRemaining = 60;
+let survivalStep = 0;
+let rhythmBeat = false;
+let precisionMarker = makePrecisionMarker();
+let precisionBonus = 0;
+let lastLockCleared = 0;
+let fxContext = null;
 const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"]);
 
 function createId() {
@@ -74,16 +101,98 @@ function emptyGrid() {
   return Array.from({ length: rows }, () => Array(cols).fill(null));
 }
 
+function makePrecisionMarker() {
+  return {
+    x: 2 + Math.floor(Math.random() * (cols - 4)),
+    y: 8 + Math.floor(Math.random() * 8)
+  };
+}
+
+function maybeSpecialModifier(forceType) {
+  if (forceType) return null;
+  if (Math.random() > 0.28) return null;
+  const keys = Object.keys(specialModifiers);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+
 function makePiece(forceType) {
   const keys = Object.keys(shapes);
   const type = forceType || keys[Math.floor(Math.random() * keys.length)];
+  const modifier = maybeSpecialModifier(forceType);
+  const special = modifier ? specialModifiers[modifier] : null;
   return {
     type,
     matrix: shapes[type].map((row) => [...row]),
     x: Math.floor(cols / 2) - 2,
     y: 0,
-    ...attrs[type]
+    ...attrs[type],
+    modifier,
+    specialName: special?.name || "",
+    rune: special?.label || attrs[type].label,
+    bornAt: performance.now(),
+    landingDelayUntil: 0,
+    lastSwingAt: 0,
+    swingDir: 1
   };
+}
+
+function cloneGrid(source) {
+  return source.map((row) => row.map((cellData) => cellData ? { ...cellData } : null));
+}
+
+function clonePiece(piece) {
+  return {
+    ...piece,
+    matrix: piece.matrix.map((row) => [...row])
+  };
+}
+
+function rememberStep(reason) {
+  if (!running || gameOver) return;
+  history.unshift({
+    reason,
+    at: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+    grid: cloneGrid(grid),
+    current: clonePiece(current),
+    next: clonePiece(next),
+    goldFloat: goldFloat ? { ...goldFloat } : null,
+    dying,
+    dyingLocks,
+    precisionMarker: { ...precisionMarker },
+    precisionBonus
+  });
+  history = history.slice(0, 5);
+  renderHistory();
+}
+
+function restoreHistory(index = 0, keepReward = true) {
+  const snapshot = history[index];
+  if (!snapshot) {
+    toast("钟渊里还没有可回溯的状态");
+    return false;
+  }
+  const playerNow = { ...localPlayer };
+  grid = cloneGrid(snapshot.grid);
+  current = clonePiece(snapshot.current);
+  next = clonePiece(snapshot.next);
+  goldFloat = snapshot.goldFloat ? { ...snapshot.goldFloat } : null;
+  dying = snapshot.dying;
+  dyingLocks = snapshot.dyingLocks;
+  precisionMarker = { ...snapshot.precisionMarker };
+  precisionBonus = snapshot.precisionBonus;
+  if (keepReward) localPlayer = playerNow;
+  drawNext();
+  syncHud();
+  toast(`回溯到 ${snapshot.at} · ${snapshot.reason}`);
+  return true;
+}
+
+function renderHistory() {
+  const select = document.querySelector("#rewindSelect");
+  if (!select) return;
+  select.innerHTML = history.length
+    ? history.map((item, index) => `<option value="${index}">${item.at} · ${escapeHtml(item.reason)}</option>`).join("")
+    : '<option value="0">暂无可回溯状态</option>';
 }
 
 function rotate(matrix) {
@@ -105,37 +214,82 @@ function collide(piece, offsetX = 0, offsetY = 0, matrix = piece.matrix) {
 function merge(piece) {
   piece.matrix.forEach((row, y) => row.forEach((value, x) => {
     if (value && piece.y + y >= 0) {
-      grid[piece.y + y][piece.x + x] = { color: piece.color, label: piece.label, tag: piece.tag };
+      grid[piece.y + y][piece.x + x] = {
+        color: piece.modifier ? specialModifiers[piece.modifier].color : piece.color,
+        label: piece.label,
+        tag: piece.tag,
+        modifier: piece.modifier,
+        rune: piece.rune,
+        type: piece.type
+      };
     }
   }));
 }
 
 function clearLines(tag) {
-  let cleared = 0;
-  outer: for (let y = rows - 1; y >= 0; y--) {
-    for (let x = 0; x < cols; x++) {
-      if (!grid[y][x]) continue outer;
-    }
-    grid.splice(y, 1);
-    grid.unshift(Array(cols).fill(null));
-    cleared++;
-    y++;
+  const fullRows = [];
+  for (let y = rows - 1; y >= 0; y--) {
+    if (grid[y].every(Boolean)) fullRows.push(y);
   }
+  if (!fullRows.length) {
+    lastLockCleared = 0;
+    return 0;
+  }
+  const curseLocked = fullRows.some((y) => grid[y].some((block) => block?.modifier === "curse"));
+  if (curseLocked && fullRows.length < 2) {
+    lastLockCleared = 0;
+    playBell("curse");
+    toast("诅咒方块拒绝结算：必须一次消除 2 行以上");
+    return 0;
+  }
+  let cleared = fullRows.length;
+  const clearSet = new Set(fullRows);
+  grid = grid.filter((_, index) => !clearSet.has(index));
+  while (grid.length < rows) grid.unshift(Array(cols).fill(null));
   if (cleared > 0) {
     const tags = [tag];
+    let bonusThisClear = 0;
     if (tag === "greed" && goldFloat) {
       localPlayer.coins += goldFloat.value;
       toast(`贪财拾取 +${goldFloat.value} 金币`);
       goldFloat = null;
     }
+    if (dying && cleared >= 3) {
+      dying = false;
+      dyingLocks = 0;
+      toast("濒死解除：三行以上续命成功");
+    }
+    zhongyuan = Math.min(10, zhongyuan + cleared);
+    if (tag === "bomb") tags.push("bomb");
+    if (current.modifier === "rewind") {
+      setTimeout(() => {
+        if (restoreHistory(Math.min(2, history.length - 1), true)) {
+          toast("时间倒流方块触发：奖励保留，棋盘回到数步前");
+        }
+      }, 260);
+    }
+    playBell("clear", cleared);
+    if (gameMode === "precision") {
+      const touchedMarker = fullRows.some((y) => y === precisionMarker.y) || pieceTouchesMarker(current);
+      if (touchedMarker) {
+        precisionBonus += 1;
+        bonusThisClear = 260;
+        localPlayer.score += bonusThisClear;
+        toast("精准刻度命中：额外分数 +260");
+        precisionMarker = makePrecisionMarker();
+      }
+    }
     post("/api/line-clear", { playerId, lines: cleared, tags }).then((data) => {
       localPlayer = data.player;
-      toast(`消除 ${cleared} 行，金币 +${data.reward.total}`);
+      localPlayer.score += bonusThisClear;
+      toast(`消除 ${cleared} 行，钟渊 +${cleared}，金币 +${data.reward.total}`);
       syncHud();
     }).catch(() => {
       toast("服务器结算暂时失败，本局仍可继续");
     });
   }
+  lastLockCleared = cleared;
+  return cleared;
 }
 
 function nextPiece() {
@@ -147,9 +301,17 @@ function nextPiece() {
       grid.splice(rows - 1, 1);
       grid.unshift(Array(cols).fill(null));
       toast("铁壁护盾抵挡了一次死亡");
+    } else if (!dying) {
+      dying = true;
+      dyingLocks = 3;
+      grid[0] = Array(cols).fill(null);
+      grid[1] = Array(cols).fill(null);
+      grid[2] = Array(cols).fill(null);
+      toast("进入濒死状态：3 次落块内一次消 3 行以上才能续命");
     } else {
       running = false;
       gameOver = true;
+      playBell("gameover");
       toast("爆仓式失败，点击重开");
     }
   }
@@ -162,6 +324,20 @@ function drop() {
     current.y++;
     return;
   }
+  if (current.modifier === "pendulum") {
+    const now = performance.now();
+    if (!current.landingDelayUntil) {
+      current.landingDelayUntil = now + 1000;
+      current.lastSwingAt = 0;
+      toast("钟摆方块进入 1 秒摆动窗口");
+      return;
+    }
+    if (now < current.landingDelayUntil) {
+      swingPendulum(now);
+      return;
+    }
+  }
+  rememberStep(`落定 ${current.specialName || attrs[current.type].label}`);
   merge(current);
   if (current.tag === "shield") {
     localPlayer.shields += 1;
@@ -170,11 +346,34 @@ function drop() {
   if (current.tag === "bomb") {
     addGarbageLine();
   }
-  clearLines(current.tag);
+  const cleared = clearLines(current.tag);
+  if (dying && cleared < 3) {
+    dyingLocks -= 1;
+    if (dyingLocks <= 0) {
+      running = false;
+      gameOver = true;
+      playBell("gameover");
+      toast("濒死倒计时耗尽：低沉钟鸣响起");
+      syncHud();
+      return;
+    }
+  }
   nextPiece();
 }
 
+function swingPendulum(now) {
+  if (now - current.lastSwingAt < 180) return;
+  current.lastSwingAt = now;
+  if (!collide(current, current.swingDir, 0)) {
+    current.x += current.swingDir;
+  } else {
+    current.swingDir *= -1;
+    if (!collide(current, current.swingDir, 0)) current.x += current.swingDir;
+  }
+}
+
 function hardDrop() {
+  rememberStep("硬降前");
   while (!collide(current, 0, 1)) current.y++;
   drop();
   draw();
@@ -187,15 +386,31 @@ function addGarbageLine() {
 }
 
 function drawCell(ctx, x, y, block, size = cell) {
-  ctx.fillStyle = block.color;
-  ctx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  const left = x * size;
+  const top = y * size;
+  const gradient = ctx.createLinearGradient(left, top, left + size, top + size);
+  gradient.addColorStop(0, block.color);
+  gradient.addColorStop(1, "#11151d");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(left + 1, top + 1, size - 2, size - 2);
   ctx.fillStyle = "rgba(255,255,255,.14)";
-  ctx.fillRect(x * size + 1, y * size + 1, size - 2, 5);
+  ctx.fillRect(left + 1, top + 1, size - 2, 5);
+  ctx.strokeStyle = "rgba(255, 232, 174, .38)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(left + size / 2, top + size / 2, size * 0.28, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(left + size * 0.2, top + size * 0.5);
+  ctx.lineTo(left + size * 0.8, top + size * 0.5);
+  ctx.moveTo(left + size * 0.5, top + size * 0.2);
+  ctx.lineTo(left + size * 0.5, top + size * 0.8);
+  ctx.stroke();
   ctx.fillStyle = "#071017";
   ctx.font = `${Math.floor(size * 0.5)}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(block.label, x * size + size / 2, y * size + size / 2);
+  ctx.fillText(block.rune || block.label, left + size / 2, top + size / 2);
 }
 
 function draw() {
@@ -216,6 +431,7 @@ function draw() {
     boardCtx.stroke();
   }
   grid.forEach((row, y) => row.forEach((block, x) => block && drawCell(boardCtx, x, y, block)));
+  if (gameMode === "precision") drawPrecisionMarker();
   current.matrix.forEach((row, y) => row.forEach((value, x) => {
     if (value) drawCell(boardCtx, current.x + x, current.y + y, current);
   }));
@@ -232,6 +448,27 @@ function draw() {
   }
 }
 
+function drawPrecisionMarker() {
+  boardCtx.save();
+  boardCtx.strokeStyle = "rgba(242, 193, 78, .52)";
+  boardCtx.fillStyle = "rgba(242, 193, 78, .08)";
+  boardCtx.lineWidth = 2;
+  const x = precisionMarker.x * cell;
+  const y = precisionMarker.y * cell;
+  boardCtx.fillRect(x + 4, y + 4, cell - 8, cell - 8);
+  boardCtx.strokeRect(x + 5, y + 5, cell - 10, cell - 10);
+  boardCtx.beginPath();
+  boardCtx.arc(x + cell / 2, y + cell / 2, 8, 0, Math.PI * 2);
+  boardCtx.stroke();
+  boardCtx.restore();
+}
+
+function pieceTouchesMarker(piece) {
+  return piece.matrix.some((row, y) => row.some((value, x) => (
+    value && piece.x + x === precisionMarker.x && piece.y + y === precisionMarker.y
+  )));
+}
+
 function drawNext() {
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
   const size = 24;
@@ -245,8 +482,9 @@ function drawNext() {
 function update(time = 0) {
   const delta = time - last;
   last = time;
+  updateModeClock(time);
   dropCounter += delta;
-  if (dropCounter > dropInterval) {
+  if (dropCounter > currentDropInterval()) {
     drop();
     dropCounter = 0;
   }
@@ -254,11 +492,42 @@ function update(time = 0) {
   requestAnimationFrame(update);
 }
 
+function updateModeClock(time) {
+  if (!running || !modeStartedAt) {
+    rhythmBeat = false;
+    return;
+  }
+  const elapsed = Math.max(0, (Date.now() - modeStartedAt) / 1000);
+  modeRemaining = Math.max(0, 60 - elapsed);
+  survivalStep = Math.floor(elapsed / 18);
+  rhythmBeat = gameMode === "rhythm" && Math.floor(time / 520) % 2 === 0;
+  if (gameMode === "timed" && modeRemaining <= 0) {
+    running = false;
+    gameOver = true;
+    playBell("gameover");
+    toast(`60秒限时结束：最终分数 ${Math.floor(localPlayer.score)}`);
+  }
+  syncClockHud();
+}
+
+function currentDropInterval() {
+  const elapsed = modeStartedAt ? Math.max(0, (Date.now() - modeStartedAt) / 1000) : 0;
+  const dayCycle = Math.floor(elapsed / 14) % 2;
+  const dayNightBase = dayCycle === 0 ? 860 : 620;
+  let interval = Math.min(dropInterval, dayNightBase);
+  if (gameMode === "survival") interval -= survivalStep * 55;
+  if (gameMode === "timed") interval -= Math.floor((60 - modeRemaining) / 10) * 35;
+  if (gameMode === "rhythm" && rhythmBeat) interval = Math.min(interval, 360);
+  return Math.max(260, interval);
+}
+
 function move(dir) {
+  rememberStep(dir < 0 ? "左移" : "右移");
   if (!collide(current, dir, 0)) current.x += dir;
 }
 
 function rotateCurrent() {
+  rememberStep("旋转");
   const rotated = rotate(current.matrix);
   if (!collide(current, 0, 0, rotated)) {
     current.matrix = rotated;
@@ -272,14 +541,27 @@ function rotateCurrent() {
 }
 
 function resetGame(startNow = false, forceType = null) {
+  const modeSelect = document.querySelector("#modeSelect");
+  if (modeSelect) gameMode = modeSelect.value;
   grid = emptyGrid();
   current = makePiece(forceType);
   next = makePiece();
   running = startNow;
   paused = false;
   gameOver = false;
+  history = [];
+  zhongyuan = 0;
+  dying = false;
+  dyingLocks = 0;
+  precisionMarker = makePrecisionMarker();
+  precisionBonus = 0;
+  survivalStep = 0;
+  modeRemaining = 60;
+  modeStartedAt = startNow ? Date.now() : 0;
   dropCounter = 0;
   drawNext();
+  renderHistory();
+  syncHud();
   toast(startNow ? "方块战场已开局" : "点击开始，进入方块战场");
 }
 
@@ -299,10 +581,13 @@ async function startGame() {
     }
   }
   if (gameOver || forceType) resetGame(false, forceType);
+  const modeSelect = document.querySelector("#modeSelect");
+  gameMode = modeSelect?.value || gameMode || "standard";
   running = true;
   paused = false;
+  if (!modeStartedAt) modeStartedAt = Date.now();
   syncHud();
-  toast(forceType ? "暴击幸运块生效：长条进场" : "方块战场已开局");
+  toast(forceType ? "暴击幸运块生效：长条进场" : `${modeNames[gameMode]} 已开局`);
 }
 
 function syncHud() {
@@ -314,6 +599,37 @@ function syncHud() {
   document.querySelector("#pauseBtn").textContent = paused ? "继续" : "暂停";
   document.querySelector("[data-player-name]").textContent = localPlayer.name || "玩家";
   document.querySelector("[data-player-coins]").textContent = Math.floor(localPlayer.coins).toLocaleString("zh-CN");
+  const zhongyuanValue = document.querySelector("#zhongyuanValue");
+  const zhongyuanBar = document.querySelector("#zhongyuanBar");
+  const dangerState = document.querySelector("#dangerState");
+  const modeText = document.querySelector("#modeText");
+  const speedText = document.querySelector("#speedText");
+  const specialText = document.querySelector("#specialText");
+  const rewindBtn = document.querySelector("#rewindBtn");
+  if (zhongyuanValue) zhongyuanValue.textContent = `${zhongyuan}/10`;
+  if (zhongyuanBar) zhongyuanBar.style.width = `${zhongyuan * 10}%`;
+  if (dangerState) dangerState.textContent = dying ? `濒死 ${dyingLocks}` : "稳定";
+  if (modeText) modeText.textContent = modeNames[gameMode] || "昼夜标准";
+  if (speedText) speedText.textContent = `${currentDropInterval()}ms`;
+  if (specialText) specialText.textContent = current.specialName ? `${current.specialName} · ${current.type}` : `${current.type} · ${attrs[current.type].label}`;
+  if (rewindBtn) rewindBtn.disabled = zhongyuan < 10 || !history.length;
+  syncClockHud();
+}
+
+function syncClockHud() {
+  const clockState = document.querySelector("#clockState");
+  const modeTimer = document.querySelector("#modeTimer");
+  const rhythmLight = document.querySelector("#rhythmLight");
+  if (clockState) {
+    const elapsed = modeStartedAt ? Math.max(0, (Date.now() - modeStartedAt) / 1000) : 0;
+    clockState.textContent = Math.floor(elapsed / 14) % 2 === 0 ? "白昼慢落" : "夜幕急坠";
+  }
+  if (modeTimer) {
+    modeTimer.textContent = gameMode === "timed"
+      ? `${Math.ceil(modeRemaining)}s`
+      : `阶梯 ${survivalStep}`;
+  }
+  if (rhythmLight) rhythmLight.classList.toggle("active", rhythmBeat);
 }
 
 function renderMarket(data) {
@@ -349,6 +665,44 @@ function renderChat(messages) {
 
 function toast(text) {
   document.querySelector("#eventTicker").textContent = text;
+}
+
+function ensureFx() {
+  const AudioClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioClass) return null;
+  if (!fxContext) fxContext = new AudioClass();
+  if (fxContext.state === "suspended") fxContext.resume();
+  return fxContext;
+}
+
+function ring(ctx, freq, when, duration, gainValue) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(freq, when);
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.exponentialRampToValueAtTime(gainValue, when + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(when);
+  osc.stop(when + duration + 0.04);
+}
+
+function playBell(kind, cleared = 1) {
+  const ctx = ensureFx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  if (kind === "clear") {
+    ring(ctx, 880 + cleared * 80, now, 0.42, 0.08);
+    ring(ctx, 1320 + cleared * 40, now + 0.04, 0.32, 0.035);
+  } else if (kind === "gameover") {
+    ring(ctx, 146.83, now, 1.8, 0.12);
+    ring(ctx, 73.42, now + 0.08, 2.2, 0.09);
+  } else if (kind === "curse") {
+    ring(ctx, 261.63, now, 0.5, 0.06);
+    ring(ctx, 246.94, now + 0.06, 0.7, 0.045);
+  }
 }
 
 function escapeHtml(text) {
@@ -416,6 +770,28 @@ document.querySelector("#pauseBtn").addEventListener("click", () => {
   syncHud();
 });
 document.querySelector("#restartBtn").addEventListener("click", () => resetGame(true));
+document.querySelector("#modeSelect").addEventListener("change", (event) => {
+  gameMode = event.target.value;
+  if (!running) {
+    modeRemaining = 60;
+    survivalStep = 0;
+    syncHud();
+    toast(`战场模式切换为：${modeNames[gameMode]}`);
+  } else {
+    toast("当前局结束或重开后生效");
+  }
+});
+document.querySelector("#rewindBtn").addEventListener("click", () => {
+  if (zhongyuan < 10) {
+    toast("钟渊能量未满，无法回溯");
+    return;
+  }
+  const index = Number(document.querySelector("#rewindSelect").value || 0);
+  if (restoreHistory(index, true)) {
+    zhongyuan = 0;
+    syncHud();
+  }
+});
 document.querySelector("#saveName").addEventListener("click", async () => {
   try {
     const data = await post("/api/player", { name: document.querySelector("#playerName").value });

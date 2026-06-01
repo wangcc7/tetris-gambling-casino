@@ -30,9 +30,29 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
+    radial-gradient(circle at 78% 18%, transparent 0 74px, rgba(242, 193, 78, .13) 75px 77px, transparent 78px),
+    repeating-conic-gradient(from 8deg at 78% 18%, rgba(255,255,255,.08) 0deg 2deg, transparent 2deg 12deg),
     linear-gradient(115deg, transparent 0 42%, rgba(53, 215, 232, .08) 45%, transparent 48%),
     linear-gradient(65deg, transparent 0 56%, rgba(242, 193, 78, .07) 58%, transparent 62%);
   animation: market-scan 9s linear infinite;
+  z-index: -1;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  right: 8vw;
+  top: 90px;
+  width: 190px;
+  height: 190px;
+  pointer-events: none;
+  border: 1px solid rgba(242, 193, 78, .16);
+  border-radius: 50%;
+  background:
+    linear-gradient(90deg, transparent 49%, rgba(242, 193, 78, .22) 50%, transparent 51%),
+    linear-gradient(0deg, transparent 49%, rgba(53, 215, 232, .18) 50%, transparent 51%);
+  opacity: .38;
+  animation: clock-hand 18s linear infinite;
   z-index: -1;
 }
 
@@ -40,6 +60,10 @@ body::before {
   0% { transform: translateX(-12%) translateY(-4%); opacity: .4; }
   50% { opacity: .9; }
   100% { transform: translateX(12%) translateY(4%); opacity: .4; }
+}
+
+@keyframes clock-hand {
+  to { transform: rotate(360deg); }
 }
 
 .game-header {
@@ -536,21 +560,43 @@ h2 {
 }
 
 .board-wrap {
+  position: relative;
   display: grid;
   gap: 12px;
   justify-content: center;
 }
 
+.board-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -24px -42px 54px;
+  border-radius: 50%;
+  border: 1px solid rgba(242, 193, 78, .18);
+  background:
+    repeating-conic-gradient(rgba(242, 193, 78, .14) 0deg 2deg, transparent 2deg 15deg),
+    radial-gradient(circle, transparent 0 58%, rgba(53, 215, 232, .08) 59% 60%, transparent 61%);
+  opacity: .8;
+  pointer-events: none;
+  animation: clock-hand 32s linear infinite;
+}
+
 #board {
+  position: relative;
+  z-index: 1;
   width: min(100%, 420px);
   aspect-ratio: 1 / 2;
   height: auto;
-  border: 2px solid #5b6274;
+  border: 2px solid color-mix(in srgb, var(--gold) 34%, #5b6274);
   border-radius: 8px;
-  background: #090b10;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(242, 193, 78, .08), transparent 34%),
+    #090b10;
+  box-shadow: inset 0 0 42px rgba(53, 215, 232, .08), 0 0 34px rgba(0, 0, 0, .35);
 }
 
 .touch-controls {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
@@ -567,7 +613,8 @@ h2 {
 }
 
 .stat-grid div,
-.next-box {
+.next-box,
+.time-grid div {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -589,6 +636,77 @@ h2 {
   display: grid;
   justify-items: center;
   gap: 8px;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.time-grid span,
+.time-grid strong,
+.mode-panel span,
+.rewind-panel span {
+  display: block;
+}
+
+.time-grid span,
+.mode-panel span,
+.rewind-panel span {
+  color: var(--muted);
+}
+
+.time-grid strong {
+  margin-top: 4px;
+  color: var(--gold);
+}
+
+.mode-panel,
+.rewind-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.mode-panel {
+  grid-template-columns: 1fr auto;
+}
+
+.mode-panel #specialText {
+  grid-column: 1 / -1;
+  min-height: 30px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #11151d;
+  color: var(--text);
+}
+
+.rhythm-light {
+  min-height: 38px;
+  min-width: 54px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #11151d;
+  text-align: center;
+  font-weight: 800;
+}
+
+.rhythm-light.active {
+  color: #211a05;
+  background: var(--gold);
+  box-shadow: 0 0 22px rgba(242, 193, 78, .32);
+}
+
+#rewindBtn:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+  filter: grayscale(.5);
 }
 
 #next {
@@ -906,6 +1024,7 @@ h2 {
   .chat-layout,
   .rank-grid,
   .kpi-row,
+  .time-grid,
   .inline-form,
   .trade-desk,
   .stat-grid.wide {

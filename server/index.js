@@ -12,7 +12,7 @@ const playerPort = Number(process.env.PLAYER_PORT || 8080);
 const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
 const adminPassword = process.env.ADMIN_PASSWORD || "gambleMaster666";
-const appVersion = process.env.APP_VERSION || "0.4.0-mysql-market";
+const appVersion = process.env.APP_VERSION || "0.5.0-timefield";
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",
   port: Number(process.env.DB_PORT || 3306),

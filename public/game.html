@@ -29,9 +29,32 @@
             <div class="stat-grid">
               <div><span>金币</span><strong id="coins">1000</strong></div><div><span>分数</span><strong id="score">0</strong></div><div><span>消除</span><strong id="lines">0</strong></div><div><span>护盾</span><strong id="shields">0</strong></div>
             </div>
+            <div class="time-grid">
+              <div><span>钟渊能量</span><strong id="zhongyuanValue">0/10</strong><div class="bar"><i id="zhongyuanBar"></i></div></div>
+              <div><span>时相</span><strong id="clockState">白昼慢落</strong></div>
+              <div><span>模式</span><strong id="modeText">昼夜标准</strong></div>
+              <div><span>状态</span><strong id="dangerState">稳定</strong></div>
+              <div><span>速度</span><strong id="speedText">820ms</strong></div>
+              <div><span>倒计时</span><strong id="modeTimer">阶梯 0</strong></div>
+            </div>
+            <div class="mode-panel">
+              <select id="modeSelect" aria-label="战场模式">
+                <option value="standard">昼夜标准</option>
+                <option value="timed">60秒限时</option>
+                <option value="precision">精准刻度</option>
+                <option value="survival">倒计时生存</option>
+                <option value="rhythm">节拍坠落</option>
+              </select>
+              <span id="rhythmLight" class="rhythm-light">节拍</span>
+              <span id="specialText">普通方块</span>
+            </div>
+            <div class="rewind-panel">
+              <select id="rewindSelect" aria-label="回溯状态"><option>暂无可回溯状态</option></select>
+              <button id="rewindBtn" disabled>回溯</button>
+            </div>
             <div class="next-box"><span>下一块</span><canvas id="next" width="120" height="120"></canvas></div>
             <div class="actions"><button id="startBtn">开始</button><button id="pauseBtn">暂停</button><button id="restartBtn">重开</button></div>
-            <div class="legend"><b>I 暴击</b><b>O 铁壁</b><b>T 混乱</b><b>L 贪财</b><b>J 冻结</b><b>S 毒雾</b><b>Z 自爆</b></div>
+            <div class="legend"><b>I 暴击</b><b>O 铁壁</b><b>T 混乱</b><b>L 贪财</b><b>J 冻结</b><b>S 毒雾</b><b>Z 自爆</b><b>时 倒流</b><b>摆 钟摆</b><b>咒 诅咒</b></div>
           </aside>
         </div>
       </section>
