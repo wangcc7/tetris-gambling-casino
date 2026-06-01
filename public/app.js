@@ -70,8 +70,14 @@ let precisionBonus = 0;
 let lastLockCleared = 0;
 let fxContext = null;
 let runLines = 0;
+let runScore = 0;
 let finaleProgress = 0;
 let finaleAwake = false;
+let engravingMarks = new Map();
+let lastEngravings = new Map();
+let triggeredWhispers = new Set();
+let whisperQueue = [];
+let whisperShowing = false;
 const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"]);
 
 const finaleLines = [
@@ -80,6 +86,15 @@ const finaleLines = [
   "当终焉走满，真正沉下去的是侥幸。",
   "别跟时间讨价还价，先把结构摆正。"
 ];
+
+const whisperThresholds = [
+  [100, "时间不多了…"],
+  [300, "你还记得第几天吗？"],
+  [600, "钟声又响了。"],
+  [1000, "别回头。"]
+];
+
+const engravingRunes = ["刻", "时", "渊", "钟", "回", "寂"];
 
 function createId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -235,6 +250,94 @@ function speakFinaleLine(line) {
   }
 }
 
+function markEngravings(fullRows) {
+  const now = performance.now();
+  fullRows.forEach((y) => {
+    for (let x = 0; x < cols; x++) {
+      const key = `${x},${y}`;
+      const last = lastEngravings.get(key) || 0;
+      const doubled = now - last <= 10000;
+      engravingMarks.set(key, {
+        x,
+        y,
+        bornAt: now,
+        level: doubled ? 2 : 1,
+        rune: engravingRunes[(x + y + Math.floor(now / 1000)) % engravingRunes.length]
+      });
+      lastEngravings.set(key, now);
+    }
+  });
+}
+
+function isPieceCoveringCell(piece, cellX, cellY) {
+  return piece.matrix.some((row, y) => row.some((value, x) => (
+    value && piece.x + x === cellX && piece.y + y === cellY
+  )));
+}
+
+function pruneCoveredEngravings(now = performance.now()) {
+  for (const [key, mark] of engravingMarks) {
+    const occupied = grid[mark.y]?.[mark.x] || isPieceCoveringCell(current, mark.x, mark.y);
+    if (occupied || now - mark.bornAt > 6500) engravingMarks.delete(key);
+  }
+}
+
+function drawEngravings() {
+  const now = performance.now();
+  pruneCoveredEngravings(now);
+  boardCtx.save();
+  for (const mark of engravingMarks.values()) {
+    const age = now - mark.bornAt;
+    const fade = age <= 5000 ? 1 : Math.max(0, 1 - (age - 5000) / 1500);
+    const alpha = (mark.level > 1 ? 0.82 : 0.42) * fade;
+    const x = mark.x * cell;
+    const y = mark.y * cell;
+    boardCtx.globalAlpha = alpha;
+    boardCtx.fillStyle = mark.level > 1 ? "#ffd45f" : "#f2c14e";
+    boardCtx.font = mark.level > 1 ? "bold 17px serif" : "14px serif";
+    boardCtx.textAlign = "center";
+    boardCtx.textBaseline = "middle";
+    boardCtx.shadowColor = "rgba(242, 193, 78, .75)";
+    boardCtx.shadowBlur = mark.level > 1 ? 14 : 7;
+    boardCtx.fillText(mark.rune, x + cell / 2, y + cell / 2);
+    boardCtx.strokeStyle = mark.level > 1 ? "#ffd45f" : "#f2c14e";
+    boardCtx.lineWidth = mark.level > 1 ? 1.6 : 1;
+    boardCtx.beginPath();
+    boardCtx.arc(x + cell / 2, y + cell / 2, mark.level > 1 ? 11 : 8, 0, Math.PI * 2);
+    boardCtx.stroke();
+  }
+  boardCtx.restore();
+}
+
+function addRunScore(points) {
+  runScore += points;
+  for (const [threshold, text] of whisperThresholds) {
+    if (runScore >= threshold && !triggeredWhispers.has(threshold)) {
+      triggeredWhispers.add(threshold);
+      whisperQueue.push(text);
+    }
+  }
+  showNextWhisper();
+}
+
+function showNextWhisper() {
+  if (whisperShowing || !whisperQueue.length) return;
+  const text = whisperQueue.shift();
+  const el = document.querySelector("#whisperOverlay");
+  if (!el) return;
+  whisperShowing = true;
+  el.textContent = text;
+  el.classList.remove("show");
+  void el.offsetWidth;
+  el.classList.add("show");
+  playBell("whisper");
+  setTimeout(() => {
+    el.classList.remove("show");
+    whisperShowing = false;
+    setTimeout(showNextWhisper, 260);
+  }, 2500);
+}
+
 function rotate(matrix) {
   return matrix[0].map((_, index) => matrix.map((row) => row[index]).reverse());
 }
@@ -283,6 +386,7 @@ function clearLines(tag) {
     return 0;
   }
   let cleared = fullRows.length;
+  markEngravings(fullRows);
   const clearSet = new Set(fullRows);
   grid = grid.filter((_, index) => !clearSet.has(index));
   while (grid.length < rows) grid.unshift(Array(cols).fill(null));
@@ -290,6 +394,7 @@ function clearLines(tag) {
     const tags = [tag];
     let bonusThisClear = 0;
     runLines += cleared;
+    addRunScore(cleared * 100);
     advanceFinale(cleared);
     if (tag === "greed" && goldFloat) {
       localPlayer.coins += goldFloat.value;
@@ -317,6 +422,7 @@ function clearLines(tag) {
         precisionBonus += 1;
         bonusThisClear = 260;
         localPlayer.score += bonusThisClear;
+        addRunScore(bonusThisClear);
         toast("精准刻度命中：额外分数 +260");
         precisionMarker = makePrecisionMarker();
       }
@@ -478,6 +584,7 @@ function draw() {
     boardCtx.lineTo(cols * cell, y * cell);
     boardCtx.stroke();
   }
+  drawEngravings();
   grid.forEach((row, y) => row.forEach((block, x) => block && drawCell(boardCtx, x, y, block)));
   if (gameMode === "precision") drawPrecisionMarker();
   current.matrix.forEach((row, y) => row.forEach((value, x) => {
@@ -604,8 +711,15 @@ function resetGame(startNow = false, forceType = null) {
   precisionMarker = makePrecisionMarker();
   precisionBonus = 0;
   runLines = 0;
+  runScore = 0;
   finaleProgress = 0;
   finaleAwake = false;
+  engravingMarks = new Map();
+  lastEngravings = new Map();
+  triggeredWhispers = new Set();
+  whisperQueue = [];
+  whisperShowing = false;
+  document.querySelector("#whisperOverlay")?.classList.remove("show");
   survivalStep = 0;
   modeRemaining = 60;
   modeStartedAt = startNow ? Date.now() : 0;
@@ -766,6 +880,9 @@ function playBell(kind, cleared = 1) {
   } else if (kind === "curse") {
     ring(ctx, 261.63, now, 0.5, 0.06);
     ring(ctx, 246.94, now + 0.06, 0.7, 0.045);
+  } else if (kind === "whisper") {
+    ring(ctx, 1046.5, now, 0.34, 0.028);
+    ring(ctx, 1568, now + 0.025, 0.28, 0.018);
   }
 }
 

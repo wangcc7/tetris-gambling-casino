@@ -644,6 +644,40 @@ h2 {
   background: radial-gradient(circle at 50% 20%, rgba(255, 92, 108, .22), transparent 34%), var(--bg);
 }
 
+.whisper-overlay {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 168px;
+  width: min(86%, 320px);
+  transform: translate(-50%, 12px);
+  padding: 10px 14px;
+  color: #ffe8ae;
+  background: rgba(9, 11, 16, .68);
+  border: 1px solid rgba(242, 193, 78, .24);
+  border-radius: 999px;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 14px rgba(242, 193, 78, .42);
+  transition: opacity .55s ease, transform .55s ease;
+}
+
+.whisper-overlay.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  animation: whisper-drift 2.5s ease both;
+}
+
+@keyframes whisper-drift {
+  0% { opacity: 0; transform: translate(-50%, 12px); }
+  18% { opacity: 1; transform: translate(-50%, 0); }
+  78% { opacity: 1; transform: translate(-50%, -2px); }
+  100% { opacity: 0; transform: translate(-50%, -10px); }
+}
+
 #board {
   position: relative;
   z-index: 1;
