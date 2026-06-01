@@ -36,7 +36,7 @@ async function refresh() {
   const res = await fetch("/admin/api/state");
   if (res.status === 401) return;
   adminState = await res.json();
-  $("#serverMeta").textContent = `在线 ${adminState.onlinePlayers} 人 · 庄家池 ${Math.round(adminState.bankerPool)} · 亏损目标 ${adminState.lossTarget}%`;
+  $("#serverMeta").textContent = `在线 ${adminState.onlinePlayers} 人 · 钟渊池 ${Math.round(adminState.bankerPool)} · 亏损目标 ${adminState.lossTarget}%`;
   $("#stockSelect").innerHTML = adminState.stocks.map((s) => `<option value="${s.code}">${s.code} ${s.name}</option>`).join("");
   $("#futureSelect").innerHTML = adminState.futures.map((f) => `<option value="${f.code}">${f.code} ${f.name}</option>`).join("");
   $("#playerSelect").innerHTML = adminState.players.map((p) => `<option value="${p.id}">${p.name} · ${Math.round(p.coins)} 金币</option>`).join("") || `<option value="">暂无玩家</option>`;
@@ -89,7 +89,7 @@ $("#coinApply").addEventListener("click", () => {
 });
 $("#announceApply").addEventListener("click", () => action("announce", { text: $("#announceText").value }));
 $("#leekDay").addEventListener("click", () => {
-  if (confirm("确认触发韭菜日？所有玩家金币减半。")) action("leekDay");
+  if (confirm("确认触发终焉日？所有玩家金币减半。")) action("leekDay");
 });
 $("#rageOn").addEventListener("click", () => {
   rage = !rage;

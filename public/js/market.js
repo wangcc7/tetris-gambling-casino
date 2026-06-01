@@ -9,7 +9,7 @@ async function render() {
   renderFutures(latest.futures, "#futures");
   document.querySelector("#portfolio").innerHTML = latest.player.positions.length
     ? latest.player.positions.map((p) => `<div class="asset-row"><b>${p.code}</b><span>${p.side || "持仓"} ${p.qty}</span><em>${money(p.cost)}</em></div>`).join("")
-    : `<p class="muted">暂无持仓，适合先围观庄家表演。</p>`;
+    : `<p class="muted">暂无持仓，适合先围观钟渊表演。</p>`;
   document.querySelector("#marketEvents").innerHTML = latest.marketEvents.map((e) => `<li>${e}</li>`).join("");
 }
 

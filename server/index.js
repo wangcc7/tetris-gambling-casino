@@ -26,11 +26,11 @@ let db = null;
 let dbReady = false;
 let mysqlStatus = "connecting";
 const world = {
-  name: "极乐交易城",
-  tagline: "用方块铸币，用行情下注，用公会翻盘",
-  premise: "玩家是被庄家 AI 拉进交易城的方块矿工。消除方块会铸造金币，金币进入股票、期货、公会和聊天室情绪战，所有荣耀都来自一次次对抗庄家的波动。",
-  factions: ["方块矿工", "庄家柜台", "韭菜公会", "内幕广播台"],
-  loop: ["方块战场铸币", "市场下注放大情绪", "公会抱团反杀", "排行榜制造名声", "聊天室扩散故事"]
+  name: "终焉钟城",
+  tagline: "十日轮回，钟声为证",
+  premise: "玩家被钟渊系统拉入一座不断重置的终焉钟城。方块不是矿石，而是试炼碎片；行情、新闻、公会和聊天都是人性的压力场。活下去不是目的，看清规则才是。",
+  factions: ["试炼者", "钟渊系统", "生肖裁判", "回响者"],
+  loop: ["方块试炼积累筹码", "市场雾区制造选择", "公会结盟交换情报", "排行榜记录回响", "聊天室暴露人心"]
 };
 
 const stocks = [
@@ -61,49 +61,49 @@ const futures = [
 ];
 
 const npcs = [
-  { name: "老韭菜", personality: "悲观矿工", strategy: "经常喊崩盘，偶尔蒙对", line: "柜台灯变红了，我闻到砸盘味。" },
-  { name: "李老师", personality: "喊单讲师", strategy: "喊单后反向操作", line: "今晚的方块指数有剧本，懂的进场。" },
-  { name: "王姐", personality: "收益晒图党", strategy: "晒收益图吸引跟买", line: "我在酒水板块捡了三轮金币，截图先不发。" },
-  { name: "程序员", personality: "漏洞猎人", strategy: "质疑庄家代码", line: "庄家柜台的随机数不干净，这个我很熟。" },
-  { name: "神秘人", personality: "内幕广播员", strategy: "50% 准确率内幕", line: "广播台消息：新能源仓门可能要关。" },
-  { name: "庄家柜台", personality: "镰刀 AI", strategy: "嘲讽亏损玩家", line: "你的成本线已经进入我的视野。" },
-  { name: "天台保安", personality: "冷幽默", strategy: "亏损事件刷存在感", line: "天台不是出口，排行榜才是。" },
-  { name: "量化小哥", personality: "理性疯", strategy: "解释一切波动", line: "情绪热度超过 70，柜台通常会反手。" },
-  { name: "镰刀实习生", personality: "柜台新人", strategy: "庄家跟班", line: "我刚学会定向收割按钮，手有点痒。" },
-  { name: "韭菜导师", personality: "反向导师", strategy: "鼓励越跌越买", line: "别急着跑，亏损也是交易城履历。" }
+  { name: "齐夏", personality: "冷静说谎者", strategy: "先拆规则，再拆人心", line: "先别相信钟声，先看它要求你付出什么。" },
+  { name: "林檎", personality: "清醒心理医生", strategy: "观察情绪裂缝", line: "你以为自己在选方块，其实是在暴露恐惧。" },
+  { name: "乔家劲", personality: "仗义硬拳", strategy: "用直觉撞开死局", line: "别把路想得太玄，能活一秒就往前打一秒。" },
+  { name: "陈俊南", personality: "笑面担当", strategy: "用玩笑遮住压力", line: "这局要是还能回来，我请全频道喝凉茶。" },
+  { name: "楚天秋", personality: "温柔疯王", strategy: "以秩序包装危险", line: "所有人都想破局，可不是所有人都配知道出口。" },
+  { name: "文巧云", personality: "沉静领袖", strategy: "把牺牲算进棋盘", line: "别急着赢，先确认你愿意失去什么。" },
+  { name: "章晨泽", personality: "锋利行动派", strategy: "在压迫里反击", line: "规则越冷，越要把手伸出去。" },
+  { name: "甜甜", personality: "柔软幸存者", strategy: "用善意维持队伍温度", line: "如果钟声又响了，至少别让同伴一个人听。" },
+  { name: "地虎", personality: "粗暴裁判", strategy: "逼玩家正面下注", line: "别磨蹭，钟城从不奖励犹豫的人。" },
+  { name: "青龙", personality: "高位审判者", strategy: "以规则压迫全局", line: "回响越响，代价越重。你们最好记住。" }
 ];
 
 const guilds = [
-  { id: "g-sickle", name: "镰刀研究院", level: 5, members: 37, treasury: 18888 },
-  { id: "g-leek", name: "天选韭菜团", level: 3, members: 24, treasury: 7600 },
-  { id: "g-tetris", name: "长条信仰会", level: 2, members: 16, treasury: 4200 }
+  { id: "g-echo", name: "回响小队", level: 5, members: 37, treasury: 18888 },
+  { id: "g-clock", name: "钟声同盟", level: 3, members: 24, treasury: 7600 },
+  { id: "g-zodiac", name: "生肖观测所", level: 2, members: 16, treasury: 4200 }
 ];
 
 const marketEvents = [
-  "黑色星期一预警：高控盘股票散户热度过高时容易跳水",
-  "政策利好传闻：白酒板块有 NPC 正在喊单",
+  "第十日预警：高控盘股票散户热度过高时容易触发钟声下坠",
+  "生肖传闻：白酒板块出现反向诱导，跟随前先看规则",
   "交易所故障演练：后续将加入限时无法卖出事件"
 ];
 
 const missionTemplates = [
-  { id: "signin", title: "户籍柜台签到", desc: "完成一次每日签到", metric: "signin", target: 1, reward: 120 },
-  { id: "clear_10", title: "清理十行矿渣", desc: "在方块战场累计消除 10 行", metric: "lines", target: 10, reward: 180 },
-  { id: "speak_world", title: "广播台露脸", desc: "在任意频道发言 1 次", metric: "chat", target: 1, reward: 80 },
-  { id: "open_trade", title: "柜台第一单", desc: "完成 1 次股票或期货交易", metric: "trades", target: 1, reward: 160 },
-  { id: "guild_action", title: "抱团取暖", desc: "创建或加入 1 个公会", metric: "guildActions", target: 1, reward: 220 }
+  { id: "signin", title: "入城点名", desc: "完成一次每日签到", metric: "signin", target: 1, reward: 120 },
+  { id: "clear_10", title: "刻下十道钟痕", desc: "在方块战场累计消除 10 行", metric: "lines", target: 10, reward: 180 },
+  { id: "speak_world", title: "钟城发声", desc: "在任意频道发言 1 次", metric: "chat", target: 1, reward: 80 },
+  { id: "open_trade", title: "雾区第一单", desc: "完成 1 次股票或期货交易", metric: "trades", target: 1, reward: 160 },
+  { id: "guild_action", title: "结盟求生", desc: "创建或加入 1 个公会", metric: "guildActions", target: 1, reward: 220 }
 ];
 
 const shopItems = [
-  { id: "lucky_crit", name: "暴击幸运块", desc: "下一局开局强制获得暴击长条", price: 200, type: "buff" },
-  { id: "shield_pack", name: "铁壁护盾包", desc: "立即获得 1 个护盾", price: 300, type: "shield" },
-  { id: "rumor_ticket", name: "内幕小纸条", desc: "向市场事件池投放一条传闻", price: 150, type: "rumor" },
-  { id: "sickle_skin", name: "镰刀皮肤券", desc: "获得称号：镰刀试用员", price: 888, type: "title" }
+  { id: "lucky_crit", name: "回声长条", desc: "下一局开局强制获得暴击长条", price: 200, type: "buff" },
+  { id: "shield_pack", name: "护命钟壳", desc: "立即获得 1 个护盾", price: 300, type: "shield" },
+  { id: "rumor_ticket", name: "雾区纸条", desc: "向市场事件池投放一条传闻", price: 150, type: "rumor" },
+  { id: "sickle_skin", name: "生肖残印", desc: "获得称号：钟城见证者", price: 888, type: "title" }
 ];
 
 const campaigns = [
   { id: "boss-night", title: "巨大化方块 BOSS", time: "每日 20:00-20:15", reward: "公会金库与成员金币", status: "预热中" },
   { id: "saturday-war", title: "周六公会战", time: "每周六 20:00", reward: "败方报名费奖池", status: "报名中" },
-  { id: "leek-day", title: "韭菜日警报", time: "后台触发", reward: "庄家池膨胀，排行榜洗牌", status: "危险" }
+  { id: "end-day", title: "终焉日警报", time: "后台触发", reward: "钟渊池膨胀，排行榜洗牌", status: "危险" }
 ];
 
 const externalData = {
@@ -328,7 +328,7 @@ function dbUserToPlayer(row, positions = []) {
     shields: row.shields,
     harvested: 0,
     positions,
-    titles: decodeJson(row.titles_json, ["交易城居民"]),
+    titles: decodeJson(row.titles_json, ["钟城试炼者"]),
     inventory: decodeJson(row.inventory_json, { luckyBlocks: 0, skins: [] }),
     stats: decodeJson(row.stats_json, { chat: 0, trades: 0, guildActions: 0, signin: 0 }),
     claimedMissions: {},
@@ -455,7 +455,7 @@ function ensurePlayer(id) {
       shields: 0,
       harvested: 0,
       positions: [],
-      titles: ["新晋韭菜"],
+      titles: ["初闻钟声"],
       inventory: { luckyBlocks: 0, skins: [] },
       stats: { chat: 0, trades: 0, guildActions: 0, signin: 0 },
       claimedMissions: {},
@@ -465,7 +465,7 @@ function ensurePlayer(id) {
       banned: false,
       updatedAt: Date.now()
     };
-    pushMessage("极乐广播台", `${state.players[id].name} 进入交易城，初始铸币额度 ${state.economy.initialCoins}`, "system");
+    pushMessage("钟城广播", `${state.players[id].name} 进入终焉钟城，初始筹码 ${state.economy.initialCoins}`, "system");
   }
   return normalizePlayer(state.players[id]);
 }
@@ -477,7 +477,7 @@ function normalizePlayer(player) {
   player.createdAt ||= new Date().toISOString();
   player.lastSeenAt ||= player.updatedAt ? new Date(player.updatedAt).toISOString() : new Date().toISOString();
   player.positions ||= [];
-  player.titles ||= ["新晋韭菜"];
+  player.titles ||= ["初闻钟声"];
   player.inventory ||= { luckyBlocks: 0, skins: [] };
   player.inventory.skins ||= [];
   player.stats ||= { chat: 0, trades: 0, guildActions: 0, signin: 0 };
@@ -517,6 +517,8 @@ function loadPersistedState() {
     if (Array.isArray(saved.futures)) state.futures = saved.futures;
     for (const player of Object.values(state.players)) normalizePlayer(player);
     for (const [username, account] of Object.entries(state.accounts)) normalizeAccount(account, username);
+    const oldNpcNames = new Set(["老韭菜", "李老师", "王姐", "程序员", "神秘人", "庄家柜台", "天台保安", "量化小哥", "镰刀实习生", "韭菜导师"]);
+    state.messages = state.messages.filter((message) => !oldNpcNames.has(message.author)).slice(0, 60);
     state.flags.nextEventAt = Date.now() + 30000;
     console.log(`Loaded persisted state from ${stateFile}`);
   } catch (error) {
@@ -580,7 +582,7 @@ function buyShopItem(player, itemId) {
   if (item.type === "shield") player.shields += 1;
   if (item.type === "buff") player.inventory.luckyBlocks += 1;
   if (item.type === "rumor") state.marketEvents.unshift(`${player.name} 投放传闻：TETRIS 指数将有异动`);
-  if (item.type === "title" && !player.titles.includes("镰刀试用员")) player.titles.push("镰刀试用员");
+  if (item.type === "title" && !player.titles.includes("钟城见证者")) player.titles.push("钟城见证者");
   pushMessage("商店柜台", `${player.name} 购买了 ${item.name}`, "event", "世界");
   return { ok: true, player, item };
 }
@@ -630,7 +632,7 @@ function registerAccount(username, password, displayName, boundPlayerId) {
   player.account = normalized;
   player.status = "active";
   player.banned = false;
-  player.titles = ["交易城居民", "新晋韭菜"];
+  player.titles = ["钟城试炼者", "初闻钟声"];
   state.accounts[normalized] = normalizeAccount({ username: normalized, passwordHash: hashPassword(password), playerId: player.id }, normalized);
   pushMessage("户籍柜台", `${player.name} 完成户籍绑定，游客进度已转为正式居民档案`, "system");
   return { ok: true, player, identity: identityFor(player), account: publicAccount(state.accounts[normalized]) };
@@ -644,7 +646,7 @@ function loginAccount(username, password) {
   const player = ensurePlayer(account.playerId);
   if (player.status === "banned") return { ok: false, error: "角色已被封禁" };
   account.lastLoginAt = new Date().toISOString();
-  pushMessage("户籍柜台", `${player.name} 回到交易城`, "system");
+  pushMessage("户籍柜台", `${player.name} 回到钟城`, "system");
   return { ok: true, player, identity: identityFor(player), account: publicAccount(account) };
 }
 
@@ -758,24 +760,24 @@ function snapshotForPlayer(player) {
 function leaderboards() {
   const players = Object.values(state.players);
   const fallbackLines = [
-    { name: "老韭菜", value: 9066 },
-    { name: "王姐", value: 7300 },
-    { name: "量化小哥", value: 6666 },
-    { name: "神秘人", value: 5200 },
-    { name: "镰刀实习生", value: 4300 }
+    { name: "齐夏", value: 9066 },
+    { name: "乔家劲", value: 7300 },
+    { name: "林檎", value: 6666 },
+    { name: "楚天秋", value: 5200 },
+    { name: "章晨泽", value: 4300 }
   ];
   const fallbackProfit = [
-    { name: "王姐", value: 12888 },
-    { name: "李老师", value: 7600 },
-    { name: "神秘人", value: 5200 },
-    { name: "程序员", value: 3100 },
-    { name: "老韭菜", value: 666 }
+    { name: "楚天秋", value: 12888 },
+    { name: "齐夏", value: 7600 },
+    { name: "林檎", value: 5200 },
+    { name: "陈俊南", value: 3100 },
+    { name: "甜甜", value: 666 }
   ];
   const fallbackHarvested = [
-    { name: "天台保安", value: 99 },
-    { name: "韭菜导师", value: 48 },
-    { name: "镰刀实习生", value: 32 },
-    { name: "老韭菜", value: 21 }
+    { name: "地虎", value: 99 },
+    { name: "青龙", value: 48 },
+    { name: "文巧云", value: 32 },
+    { name: "陈俊南", value: 21 }
   ];
   const top = (rows, fallback) => [...rows, ...fallback]
     .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
@@ -811,7 +813,7 @@ function moveMarket() {
     let delta = (Math.random() - 0.48) * 0.018;
     if (retailPressure) {
       delta = -(0.07 + Math.random() * 0.03);
-      pushMessage("庄家柜台", `${stock.name} 散户太挤，盘口突然被砸`, "danger", "市场");
+      pushMessage("钟渊系统", `${stock.name} 人群太挤，盘口突然被钟声压低`, "danger", "市场");
     } else if (stock.retailHeat < 25 && Math.random() < stock.control * 0.15) {
       delta = 0.05 + Math.random() * 0.03;
     }
@@ -830,16 +832,16 @@ function moveMarket() {
 function triggerWorldEvent() {
   const events = [
     ["牛市方块", "全服在线玩家 +50 金币", () => Object.values(state.players).forEach((p) => { p.coins += 50; })],
-    ["熊市方块", "当前赌场池笑纳 100 金币", () => { state.bankerPool += 100; }],
+    ["熊市方块", "当前钟渊池吞入 100 金币", () => { state.bankerPool += 100; }],
     ["内幕消息方块", "内幕：TETRIS 指数即将大幅波动，准确率 70%", () => {}],
-    ["韭菜祝福", "下一块更容易出现暴击属性", () => {}],
-    ["镰刀诅咒", "全场旋转手感开始变硬", () => {}]
+    ["试炼者祝福", "下一块更容易出现暴击属性", () => {}],
+    ["生肖诅咒", "全场旋转手感开始变硬", () => {}]
   ];
   const event = events[Math.floor(Math.random() * events.length)];
   event[2]();
   state.announcements.unshift({ at: new Date().toISOString(), title: event[0], text: event[1] });
   state.announcements = state.announcements.slice(0, 20);
-  pushMessage("极乐广播台", `${event[0]}：${event[1]}`, "event", "世界");
+  pushMessage("钟城广播", `${event[0]}：${event[1]}`, "event", "世界");
   state.flags.nextEventAt = Date.now() + 30000;
 }
 
@@ -916,12 +918,12 @@ async function refreshNews() {
     }));
     if (!externalData.news.length) {
       externalData.news = [
-        { title: "实时财经新闻正在同步，交易城先按本地行情广播运行", source: "极乐广播台", time: new Date().toISOString(), url: "" }
+        { title: "实时财经新闻正在同步，钟城先按本地行情广播运行", source: "钟城广播", time: new Date().toISOString(), url: "" }
       ];
     }
   } catch {
     externalData.news = externalData.news.length ? externalData.news : [
-      { title: "新闻接口暂不可用，系统保留本地市场广播", source: "极乐广播台", time: new Date().toISOString(), url: "" }
+      { title: "新闻接口暂不可用，系统保留本地市场广播", source: "钟城广播", time: new Date().toISOString(), url: "" }
     ];
   }
 }
@@ -950,7 +952,7 @@ async function adminAction(action, payload) {
   }
   if (action === "lossTarget") state.lossTarget = Math.max(0, Math.min(100, Number(payload.value || 95)));
   if (action === "inflation") state.inflation = Math.max(0.1, Math.min(10, Number(payload.value || 1)));
-  if (action === "announce") pushMessage("极乐广播台", String(payload.text || "国家队疑似入场"), "admin", "世界");
+  if (action === "announce") pushMessage("钟城广播", String(payload.text || "国家队疑似入场"), "admin", "世界");
   if (action === "coins") {
     if (dbReady && payload.playerId) {
       const id = String(payload.playerId).replace(/^u-/, "");
@@ -972,7 +974,7 @@ async function adminAction(action, payload) {
       await db.query("DELETE FROM user_positions WHERE user_id = ?", [id]);
       await db.query("UPDATE users SET coins=?, score=0, line_count=0, shields=0, titles_json=?, inventory_json=?, stats_json=? WHERE id=?", [
         state.economy.initialCoins,
-        JSON.stringify(["交易城居民"]),
+        JSON.stringify(["钟城试炼者"]),
         JSON.stringify({ luckyBlocks: 0, skins: [] }),
         JSON.stringify({ chat: 0, trades: 0, guildActions: 0, signin: 0 }),
         id
@@ -986,11 +988,11 @@ async function adminAction(action, payload) {
       player.harvested += 1;
     }
     state.bankerPool += 1000;
-    pushMessage("危险操作", "韭菜日已触发：全员金币减半，庄家池膨胀", "danger", "后台");
+    pushMessage("危险操作", "终焉日已触发：全员金币减半，钟渊池膨胀", "danger", "后台");
   }
   if (action === "rage") {
     state.flags.rageMode = Boolean(payload.enabled);
-    pushMessage("危险操作", `庄家狂暴模式：${state.flags.rageMode ? "开启" : "关闭"}`, "danger", "后台");
+    pushMessage("危险操作", `钟渊狂暴模式：${state.flags.rageMode ? "开启" : "关闭"}`, "danger", "后台");
   }
   if (action === "worldEvent") triggerWorldEvent();
   if (action === "save") saveState();
@@ -1005,7 +1007,7 @@ function tradeStock(player, code, lots) {
   player.coins -= cost;
   player.positions.push({ type: "stock", code, qty, cost, day: new Date().toISOString().slice(0, 10) });
   stock.retailHeat = Math.min(100, stock.retailHeat + 8);
-  pushMessage("交易所柜台", `${player.name} 买入 ${stock.name} ${qty} 股，庄家已记录成本线`, "event", "市场");
+  pushMessage("雾区柜台", `${player.name} 买入 ${stock.name} ${qty} 股，钟渊已记录成本线`, "event", "市场");
   return { ok: true, player };
 }
 
@@ -1039,14 +1041,14 @@ async function api(req, res) {
         username,
         hashPassword(password),
         nickname,
-        JSON.stringify(["交易城居民"]),
+        JSON.stringify(["钟城试炼者"]),
         JSON.stringify({ luckyBlocks: 0, skins: [] }),
         JSON.stringify({ chat: 0, trades: 0, guildActions: 0, signin: 0 })
       ]);
       const player = await getUserById(result.insertId);
       const token = makeToken();
       await db.query("INSERT INTO sessions (token, user_id) VALUES (?, ?)", [token, result.insertId]);
-      pushMessage("账号中心", `${player.name} 注册成为交易城玩家`, "system", "世界");
+      pushMessage("账号中心", `${player.name} 注册成为钟城试炼者`, "system", "世界");
       return sendJson(res, { ok: true, player, session: publicSession(token, player), state: snapshotForPlayer(player) });
     } catch (error) {
       return sendJson(res, { ok: false, error: "账号已存在或数据库写入失败" }, 400);
@@ -1064,7 +1066,7 @@ async function api(req, res) {
     await db.query("INSERT INTO sessions (token, user_id) VALUES (?, ?)", [token, row.id]);
     await db.query("UPDATE users SET last_login_at = NOW() WHERE id = ?", [row.id]);
     const player = await getUserById(row.id);
-    pushMessage("账号中心", `${player.name} 登录交易城`, "system", "世界");
+    pushMessage("账号中心", `${player.name} 登录钟城`, "system", "世界");
     return sendJson(res, { ok: true, player, session: publicSession(token, player), state: snapshotForPlayer(player) });
   }
   if (url.pathname === "/api/auth/logout" && req.method === "POST") {
@@ -1102,7 +1104,7 @@ async function api(req, res) {
       player.coins += 500;
       player.lastSignin = today;
       player.stats.signin += 1;
-      pushMessage("极乐广播台", `${player.name} 每日签到领取 500 金币`, "system", "世界");
+      pushMessage("钟城广播", `${player.name} 每日签到领取 500 金币`, "system", "世界");
     }
     await saveDbPlayer(player);
     return sendJson(res, { player });
@@ -1283,7 +1285,7 @@ http.createServer((req, res) => {
 setInterval(moveMarket, 4000);
 setInterval(() => {
   const npc = npcs[Math.floor(Math.random() * npcs.length)];
-  pushMessage(npc.name, npc.line, "chat", npc.name === "庄家柜台" ? "市场" : "世界");
+  pushMessage(npc.name, npc.line, "chat", ["地虎", "青龙", "楚天秋"].includes(npc.name) ? "市场" : "世界");
 }, 9000);
 setInterval(() => {
   if (Date.now() >= state.flags.nextEventAt) triggerWorldEvent();
@@ -1292,7 +1294,7 @@ setInterval(refreshExternalData, 5 * 60 * 1000);
 setInterval(saveState, 5000);
 
 if (state.messages.length === 0) {
-  pushMessage("极乐广播台", "极乐交易城开盘：金币无真实价值，但每一次翻盘都算数。", "system", "世界");
+  pushMessage("钟城广播", "终焉钟城开门：金币无真实价值，但每一道回响都会留下痕迹。", "system", "世界");
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

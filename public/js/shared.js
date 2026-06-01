@@ -204,7 +204,7 @@ export function mountMusicDock() {
   button.id = "musicToggle";
   button.className = "music-toggle";
   button.type = "button";
-  button.title = "开启交易城背景声场";
+  button.title = "开启钟城背景声场";
   button.textContent = "声场";
   button.addEventListener("click", () => toggleCasinoAudio(button));
   header.appendChild(button);

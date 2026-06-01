@@ -942,7 +942,7 @@ function resetGame(startNow = false, forceType = null) {
   drawNext();
   renderHistory();
   syncHud();
-  toast(startNow ? "方块战场已开局" : "点击开始，进入方块战场");
+  toast(startNow ? "方块战场已开局" : "点击开始，进入钟渊试炼");
 }
 
 async function startGame() {
