@@ -2,4 +2,5 @@
 ._*
 node_modules/
 data/
+mysql-data/
 *.log

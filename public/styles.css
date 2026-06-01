@@ -24,6 +24,24 @@ body {
   font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 42%, rgba(53, 215, 232, .08) 45%, transparent 48%),
+    linear-gradient(65deg, transparent 0 56%, rgba(242, 193, 78, .07) 58%, transparent 62%);
+  animation: market-scan 9s linear infinite;
+  z-index: -1;
+}
+
+@keyframes market-scan {
+  0% { transform: translateX(-12%) translateY(-4%); opacity: .4; }
+  50% { opacity: .9; }
+  100% { transform: translateX(12%) translateY(4%); opacity: .4; }
+}
+
 .game-header {
   position: sticky;
   top: 0;
@@ -85,6 +103,24 @@ body {
 
 .header-stats b {
   color: var(--gold);
+}
+
+.system-dock {
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.system-dock b {
+  color: var(--cyan);
+}
+
+.music-toggle.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #211a05;
 }
 
 .page-shell {
@@ -280,6 +316,23 @@ body {
   opacity: .55;
   background: #303543;
   border-color: var(--line);
+}
+
+.insight-card {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--line));
+  border-radius: 7px;
+  background: linear-gradient(135deg, rgba(242, 193, 78, .16), rgba(53, 215, 232, .08));
+}
+
+.insight-card b,
+.insight-card small {
+  color: var(--gold);
+}
+
+.insight-card p {
+  margin: 8px 0;
+  color: var(--text);
 }
 
 .registry-table {

@@ -1,10 +1,26 @@
 version: "2.2"
 
 services:
+  mysql:
+    image: registry.cn-hangzhou.aliyuncs.com/bigdata_cloudnative/mysql-test:5.7
+    container_name: tetris-casino-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: casinoRoot666
+      MYSQL_DATABASE: tetris_casino
+      MYSQL_USER: casino
+      MYSQL_PASSWORD: casinoPass666
+    ports:
+      - "33066:3306"
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+
   tetris-casino:
     build: .
     container_name: tetris-gambling-casino
     restart: unless-stopped
+    depends_on:
+      - mysql
     ports:
       - "8080:8080"
       - "18052:18052"
@@ -13,5 +29,11 @@ services:
       ADMIN_PORT: 18052
       ADMIN_USER: root
       ADMIN_PASSWORD: gambleMaster666
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: casino
+      DB_PASSWORD: casinoPass666
+      DB_NAME: tetris_casino
+      APP_VERSION: 0.4.0-mysql-market
     volumes:
       - ./data:/app/data

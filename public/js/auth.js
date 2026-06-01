@@ -1,4 +1,6 @@
-import { mountAuthDock, setActiveNav } from "./shared.js";
+import { mountAuthDock, mountMusicDock, mountSystemDock, setActiveNav } from "./shared.js";
 
 setActiveNav();
 mountAuthDock();
+mountSystemDock();
+mountMusicDock();

@@ -26,13 +26,13 @@ function renderIdentity(state) {
   document.querySelector("#identityCard").innerHTML = `
     <div>
       <span>当前身份</span>
-      <strong>${escapeHtml(identity.label)}</strong>
+      <strong>${escapeHtml(identity.label || "未登录")}</strong>
       <small>${escapeHtml(identity.identityNo)}</small>
     </div>
     <div>
       <span>账号</span>
-      <strong>${escapeHtml(identity.username || "未绑定")}</strong>
-      <small>${identity.canBind ? "注册会绑定当前游客进度" : "可用账号登录找回"}</small>
+      <strong>${escapeHtml(identity.username || "未登录")}</strong>
+      <small>${identity.username ? "账号数据由 MySQL 保存" : "请注册或登录后开始游戏"}</small>
     </div>
     <div>
       <span>角色状态</span>
@@ -40,7 +40,7 @@ function renderIdentity(state) {
       <small>创建于 ${escapeHtml(state.player.createdAt || "-")}</small>
     </div>
   `;
-  document.querySelector("#registerAccount").disabled = !identity.canBind;
+  document.querySelector("#registerAccount").disabled = Boolean(identity.username);
 }
 
 document.querySelector("#saveProfile").addEventListener("click", async () => {
@@ -58,13 +58,12 @@ document.querySelector("#dailySign").addEventListener("click", async () => {
 document.querySelector("#registerAccount").addEventListener("click", async () => {
   try {
     const data = await post("/api/auth/register", {
-      playerId: getPlayerId(),
       username: document.querySelector("#registerUser").value,
       password: document.querySelector("#registerPass").value,
       displayName: document.querySelector("#registerName").value
     });
-    setSession({ playerId: data.player.id, accountName: data.account.username });
-    toast("注册成功，当前游客进度已绑定为正式居民");
+    setSession(data.session);
+    toast("注册成功，已登录账号");
     render();
   } catch {
     toast("注册失败：账号可能已存在，或密码太短");
@@ -77,8 +76,8 @@ document.querySelector("#loginAccount").addEventListener("click", async () => {
       username: document.querySelector("#loginUser").value,
       password: document.querySelector("#loginPass").value
     });
-    setSession({ playerId: data.player.id, accountName: data.account.username });
-    toast("登录成功，已切换到居民档案");
+    setSession(data.session);
+    toast("登录成功，已进入账号档案");
     render();
   } catch {
     toast("登录失败：账号或密码错误");
@@ -88,7 +87,7 @@ document.querySelector("#loginAccount").addEventListener("click", async () => {
 document.querySelector("#logoutAccount").addEventListener("click", () => {
   clearSession();
   localStorage.removeItem("casinoPlayerId");
-  toast("已退出，刷新后会获得新的游客通行证");
+  toast("已退出账号");
   setTimeout(() => location.reload(), 600);
 });
 

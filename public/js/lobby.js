@@ -8,6 +8,11 @@ async function render() {
   renderStocks(state.stocks.slice(0, 4), "#stocks");
   renderFutures(state.futures, "#futures");
   renderChat(state.messages.slice(0, 8), "#chat");
+  document.querySelector("#insightCard").innerHTML = `
+    <b>${escapeHtml(state.external?.insight?.title || "丁元英式提醒")}</b>
+    <p>${escapeHtml(state.external?.insight?.text || "先看清系统，再决定出手。")}</p>
+    <small>属性：${escapeHtml(state.external?.insight?.attribute || "识局")}</small>
+  `;
   document.querySelector("#bankerPool").textContent = money(state.bankerPool);
   document.querySelector("#nextEvent").textContent = state.announcements[0]
     ? `${state.announcements[0].title}：${state.announcements[0].text}`

@@ -2,6 +2,7 @@ FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/node:20-alpine
 
 WORKDIR /app
 COPY package.json ./
+RUN npm install --omit=dev
 COPY server ./server
 COPY public ./public
 

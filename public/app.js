@@ -54,12 +54,20 @@ function createId() {
 
 function getStoredPlayerId() {
   try {
-    const session = JSON.parse(localStorage.getItem("casinoSession") || "{}");
-    if (session.playerId) return session.playerId;
+    const session = JSON.parse(localStorage.getItem("casinoAccount") || "{}");
+    if (session.userId) return session.userId;
   } catch {
-    localStorage.removeItem("casinoSession");
+    localStorage.removeItem("casinoAccount");
   }
-  return localStorage.getItem("casinoPlayerId") || createId();
+  return "guest";
+}
+
+function getSessionToken() {
+  try {
+    return JSON.parse(localStorage.getItem("casinoAccount") || "{}").token || "";
+  } catch {
+    return "";
+  }
 }
 
 function emptyGrid() {
@@ -276,10 +284,14 @@ function resetGame(startNow = false, forceType = null) {
 }
 
 async function startGame() {
+  if (!getSessionToken()) {
+    toast("请先在右上角进入身份中心登录或注册");
+    return;
+  }
   let forceType = null;
   if (!running && localPlayer.inventory && localPlayer.inventory.luckyBlocks > 0) {
     try {
-      const data = await post("/api/item/use", { playerId, itemId: "lucky_crit" });
+      const data = await post("/api/item/use", { itemId: "lucky_crit" });
       localPlayer = data.player;
       forceType = data.effect.forcePiece;
     } catch {
@@ -345,7 +357,8 @@ function escapeHtml(text) {
 
 async function getState() {
   try {
-    const res = await fetch(`/api/state?playerId=${encodeURIComponent(playerId)}`);
+    const token = getSessionToken();
+    const res = await fetch(`/api/state${token ? `?sessionToken=${encodeURIComponent(token)}` : ""}`);
     if (!res.ok) throw new Error(`state ${res.status}`);
     const data = await res.json();
     localPlayer = data.player;
@@ -354,6 +367,11 @@ async function getState() {
     renderChat(data.messages);
     const online = document.querySelector("[data-online]");
     if (online) online.textContent = data.onlinePlayers;
+    const system = document.querySelector("#systemDock");
+    if (system) {
+      const weather = data.external?.weather;
+      system.innerHTML = `<span>${new Date(data.serverTime).toLocaleString("zh-CN", { hour12: false })}</span><b>${data.version || "dev"}</b><small>${weather?.city || "济南"} ${weather?.temperature || "--"} ${weather?.text || ""}</small>`;
+    }
     const feed = document.querySelector("#battleFeed");
     if (feed) {
       feed.innerHTML = data.announcements.map((item) => `<div><b>${item.title}</b><span>${item.text}</span></div>`).join("");
@@ -364,9 +382,10 @@ async function getState() {
 }
 
 async function post(url, body) {
+  const token = getSessionToken();
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`request ${res.status}`);
@@ -399,7 +418,7 @@ document.querySelector("#pauseBtn").addEventListener("click", () => {
 document.querySelector("#restartBtn").addEventListener("click", () => resetGame(true));
 document.querySelector("#saveName").addEventListener("click", async () => {
   try {
-    const data = await post("/api/player", { playerId, name: document.querySelector("#playerName").value });
+    const data = await post("/api/player", { name: document.querySelector("#playerName").value });
     localPlayer = data.player;
     syncHud();
   } catch {
@@ -413,7 +432,7 @@ if (chatForm) {
     const input = document.querySelector("#chatInput");
     if (!input.value.trim()) return;
     try {
-      const data = await post("/api/chat", { playerId, text: input.value.trim() });
+      const data = await post("/api/chat", { text: input.value.trim() });
       input.value = "";
       if (data.messages) renderChat(data.messages);
     } catch {

@@ -7,6 +7,9 @@ async function render() {
   renderShellStatus(state);
   document.querySelector("#worldPremise").textContent = state.world.premise;
   renderChat(state.messages.filter((msg) => (msg.channel || "世界") === activeChannel), "#chat");
+  document.querySelector("#newsList").innerHTML = (state.external?.news || []).slice(0, 6).map((item) => `
+    <article class="npc-card"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.source || "新闻")}</span><small>${escapeHtml(item.time || "")}</small></article>
+  `).join("");
   document.querySelector("#npcList").innerHTML = state.npcs.map((npc) => `
     <article class="npc-card"><b>${escapeHtml(npc.name)}</b><span>${escapeHtml(npc.personality)}</span><small>${escapeHtml(npc.strategy)}</small></article>
   `).join("");

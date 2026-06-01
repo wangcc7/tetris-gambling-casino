@@ -9,28 +9,31 @@ export function createId() {
 
 export function getPlayerId() {
   const session = getSession();
-  const id = session.playerId || localStorage.getItem(playerKey) || createId();
-  localStorage.setItem(playerKey, id);
-  return id;
+  return session.userId || session.playerId || "guest";
 }
 
 export function getSession() {
   try {
-    return JSON.parse(localStorage.getItem("casinoSession") || "{}");
+    return JSON.parse(localStorage.getItem("casinoAccount") || "{}");
   } catch {
-    localStorage.removeItem("casinoSession");
+    localStorage.removeItem("casinoAccount");
     return {};
   }
 }
 
 export function setSession(session) {
-  localStorage.setItem("casinoSession", JSON.stringify(session));
-  if (session.playerId) localStorage.setItem(playerKey, session.playerId);
+  localStorage.setItem("casinoAccount", JSON.stringify(session));
+  if (session.userId) localStorage.setItem(playerKey, session.userId);
 }
 
 export async function api(path, options = {}) {
+  const session = getSession();
   const res = await fetch(path, {
-    headers: { "content-type": "application/json", ...(options.headers || {}) },
+    headers: {
+      "content-type": "application/json",
+      ...(session.token ? { authorization: `Bearer ${session.token}` } : {}),
+      ...(options.headers || {})
+    },
     ...options
   });
   if (!res.ok) throw new Error(`request failed ${res.status}`);
@@ -42,7 +45,8 @@ export function post(path, body) {
 }
 
 export async function loadState() {
-  return api(`/api/state?playerId=${encodeURIComponent(getPlayerId())}`);
+  const session = getSession();
+  return api(`/api/state${session.token ? `?sessionToken=${encodeURIComponent(session.token)}` : ""}`);
 }
 
 export function escapeHtml(text) {
@@ -80,7 +84,16 @@ export function renderShellStatus(state) {
   if (name) name.textContent = state.player.name;
   if (online) online.textContent = state.onlinePlayers;
   const authButton = document.querySelector("#authToggle");
-  if (authButton) authButton.textContent = state.identity?.mode === "resident" ? `正式居民 · ${state.identity.username}` : "游客通行证";
+  if (authButton) authButton.textContent = state.identity?.username ? `账号 · ${state.identity.username}` : "登录 / 注册";
+  const system = document.querySelector("#systemDock");
+  if (system) {
+    const weather = state.external?.weather;
+    system.innerHTML = `
+      <span>${escapeHtml(new Date(state.serverTime).toLocaleString("zh-CN", { hour12: false }))}</span>
+      <b>${escapeHtml(state.version || "dev")}</b>
+      <small>${escapeHtml(weather?.city || "济南")} ${escapeHtml(weather?.temperature || "--")} ${escapeHtml(weather?.text || "")}</small>
+    `;
+  }
 }
 
 export function renderChat(messages, target = "#chat") {
@@ -127,8 +140,55 @@ export function toast(text) {
 export function startPage(fn, interval = 2500) {
   setActiveNav();
   mountAuthDock();
+  mountSystemDock();
+  mountMusicDock();
   fn();
   return setInterval(fn, interval);
+}
+
+export function mountSystemDock() {
+  const header = document.querySelector(".game-header");
+  if (!header || document.querySelector("#systemDock")) return;
+  const dock = document.createElement("div");
+  dock.id = "systemDock";
+  dock.className = "system-dock";
+  dock.innerHTML = "<span>同步时间中...</span>";
+  header.appendChild(dock);
+}
+
+export function mountMusicDock() {
+  const header = document.querySelector(".game-header");
+  if (!header || document.querySelector("#musicToggle")) return;
+  const button = document.createElement("button");
+  button.id = "musicToggle";
+  button.className = "music-toggle";
+  button.textContent = "音乐";
+  let ctx = null;
+  let nodes = [];
+  button.addEventListener("click", () => {
+    if (ctx) {
+      nodes.forEach((node) => node.stop && node.stop());
+      nodes = [];
+      ctx.close();
+      ctx = null;
+      button.classList.remove("active");
+      return;
+    }
+    ctx = new AudioContext();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.035;
+    gain.connect(ctx.destination);
+    [110, 164.81, 220].forEach((freq, index) => {
+      const osc = ctx.createOscillator();
+      osc.type = index === 0 ? "sine" : "triangle";
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      osc.start();
+      nodes.push(osc);
+    });
+    button.classList.add("active");
+  });
+  header.appendChild(button);
 }
 
 export function mountAuthDock() {
@@ -139,7 +199,7 @@ export function mountAuthDock() {
   dock.id = "authDock";
   dock.className = "auth-dock";
   dock.innerHTML = `
-    <button id="authToggle">${session.accountName ? `正式居民 · ${escapeHtml(session.accountName)}` : "游客通行证"}</button>
+    <button id="authToggle">${session.username ? `账号 · ${escapeHtml(session.username)}` : "登录 / 注册"}</button>
   `;
   header.appendChild(dock);
   document.querySelector("#authToggle").addEventListener("click", () => {
@@ -148,5 +208,5 @@ export function mountAuthDock() {
 }
 
 export function clearSession() {
-  localStorage.removeItem("casinoSession");
+  localStorage.removeItem("casinoAccount");
 }
