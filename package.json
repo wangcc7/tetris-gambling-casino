@@ -1,0 +1,13 @@
+{
+  "name": "tetris-gambling-casino",
+  "version": "0.1.0",
+  "private": true,
+  "description": "俄罗斯方块 · 极乐赌场 prototype",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

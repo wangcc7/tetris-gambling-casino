@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>极乐赌场后台</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="admin-shell">
+      <section id="loginBox" class="admin-login">
+        <h1>极乐赌场后台</h1>
+        <input id="adminUser" value="root" autocomplete="username">
+        <input id="adminPass" value="gambleMaster666" type="password" autocomplete="current-password">
+        <button id="loginBtn">登录</button>
+      </section>
+
+      <section id="adminApp" class="admin-grid hidden">
+        <header>
+          <h1>庄家控制台</h1>
+          <p id="serverMeta">等待数据...</p>
+        </header>
+        <div class="admin-card">
+          <h2>股票操控</h2>
+          <select id="stockSelect"></select>
+          <input id="stockPercent" type="number" min="-20" max="20" value="-10">
+          <button id="stockApply">执行涨跌幅</button>
+        </div>
+        <div class="admin-card">
+          <h2>期货操控</h2>
+          <select id="futureSelect"></select>
+          <input id="futurePrice" type="number" value="666">
+          <button id="futureApply">设置即时价格</button>
+        </div>
+        <div class="admin-card">
+          <h2>经济调控</h2>
+          <label>亏损比例 <input id="lossTarget" type="range" min="0" max="100" value="95"></label>
+          <label>通胀系数 <input id="inflation" type="range" min="0.5" max="10" step="0.1" value="1"></label>
+          <button id="applyEconomy">保存参数</button>
+        </div>
+        <div class="admin-card">
+          <h2>玩家管理</h2>
+          <select id="playerSelect"></select>
+          <input id="coinAmount" type="number" value="1000">
+          <button id="coinApply">增减金币</button>
+        </div>
+        <div class="admin-card">
+          <h2>全服公告</h2>
+          <input id="announceText" value="国家队疑似入场">
+          <button id="announceApply">发送公告</button>
+        </div>
+        <div class="admin-card danger-card">
+          <h2>危险操作</h2>
+          <button id="leekDay">触发韭菜日</button>
+          <button id="rageOn">庄家狂暴开/关</button>
+        </div>
+        <div class="admin-card wide">
+          <h2>在线与行情</h2>
+          <div id="adminSnapshot" class="admin-snapshot"></div>
+        </div>
+      </section>
+    </main>
+    <script src="/admin.js"></script>
+  </body>
+</html>
