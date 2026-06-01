@@ -78,6 +78,11 @@ let lastEngravings = new Map();
 let triggeredWhispers = new Set();
 let whisperQueue = [];
 let whisperShowing = false;
+let echoMemory = new Map();
+let echoStacks = 0;
+let echoRipples = [];
+let echoFlashes = [];
+let echoFloats = [];
 const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"]);
 
 const finaleLines = [
@@ -338,6 +343,76 @@ function showNextWhisper() {
   }, 2500);
 }
 
+function triggerEcho(fullRows) {
+  const now = performance.now();
+  let resonantCells = 0;
+  const rowCenterX = (cols * cell) / 2;
+  fullRows.forEach((y) => {
+    echoRipples.push({ x: rowCenterX, y: y * cell + cell / 2, bornAt: now });
+    for (let x = 0; x < cols; x++) {
+      const key = `${x},${y}`;
+      const last = echoMemory.get(key) || 0;
+      if (now - last <= 3000) resonantCells++;
+      echoMemory.set(key, now);
+      for (const fy of [y - 1, y, y + 1]) {
+        if (fy >= 0 && fy < rows) echoFlashes.push({ x, y: fy, bornAt: now });
+      }
+    }
+  });
+  for (const [key, timestamp] of echoMemory) {
+    if (now - timestamp > 3000) echoMemory.delete(key);
+  }
+  if (!resonantCells) {
+    echoStacks = 0;
+    return 0;
+  }
+  echoStacks += 1;
+  const bonusRate = echoStacks * 0.2;
+  echoFloats.push({
+    text: `回响+${Math.round(bonusRate * 100)}%`,
+    x: rowCenterX,
+    y: (fullRows.reduce((sum, y) => sum + y, 0) / fullRows.length) * cell + cell / 2,
+    bornAt: now
+  });
+  playBell("echo", echoStacks);
+  return bonusRate;
+}
+
+function drawEchoEffects() {
+  const now = performance.now();
+  echoRipples = echoRipples.filter((ripple) => now - ripple.bornAt <= 400);
+  echoFlashes = echoFlashes.filter((flash) => now - flash.bornAt <= 260);
+  echoFloats = echoFloats.filter((float) => now - float.bornAt <= 500);
+  boardCtx.save();
+  echoFlashes.forEach((flash) => {
+    const age = now - flash.bornAt;
+    const alpha = Math.max(0, 1 - age / 260) * 0.28;
+    boardCtx.fillStyle = `rgba(242, 193, 78, ${alpha})`;
+    boardCtx.fillRect(flash.x * cell + 1, flash.y * cell + 1, cell - 2, cell - 2);
+  });
+  echoRipples.forEach((ripple) => {
+    const t = (now - ripple.bornAt) / 400;
+    boardCtx.globalAlpha = Math.max(0, 1 - t) * 0.7;
+    boardCtx.strokeStyle = "#f2c14e";
+    boardCtx.lineWidth = 2;
+    boardCtx.beginPath();
+    boardCtx.arc(ripple.x, ripple.y, 12 + t * 150, 0, Math.PI * 2);
+    boardCtx.stroke();
+  });
+  echoFloats.forEach((float) => {
+    const t = (now - float.bornAt) / 500;
+    boardCtx.globalAlpha = Math.max(0, 1 - t);
+    boardCtx.fillStyle = "#ffe8ae";
+    boardCtx.font = "bold 16px sans-serif";
+    boardCtx.textAlign = "center";
+    boardCtx.textBaseline = "middle";
+    boardCtx.shadowColor = "rgba(242, 193, 78, .75)";
+    boardCtx.shadowBlur = 12;
+    boardCtx.fillText(float.text, float.x, float.y - t * 26);
+  });
+  boardCtx.restore();
+}
+
 function rotate(matrix) {
   return matrix[0].map((_, index) => matrix.map((row) => row[index]).reverse());
 }
@@ -387,14 +462,17 @@ function clearLines(tag) {
   }
   let cleared = fullRows.length;
   markEngravings(fullRows);
+  const echoBonusRate = triggerEcho(fullRows);
+  const echoBonusScore = Math.round(cleared * 100 * echoBonusRate);
   const clearSet = new Set(fullRows);
   grid = grid.filter((_, index) => !clearSet.has(index));
   while (grid.length < rows) grid.unshift(Array(cols).fill(null));
   if (cleared > 0) {
     const tags = [tag];
-    let bonusThisClear = 0;
+    let bonusThisClear = echoBonusScore;
     runLines += cleared;
     addRunScore(cleared * 100);
+    if (echoBonusScore) addRunScore(echoBonusScore);
     advanceFinale(cleared);
     if (tag === "greed" && goldFloat) {
       localPlayer.coins += goldFloat.value;
@@ -420,9 +498,9 @@ function clearLines(tag) {
       const touchedMarker = fullRows.some((y) => y === precisionMarker.y) || pieceTouchesMarker(current);
       if (touchedMarker) {
         precisionBonus += 1;
-        bonusThisClear = 260;
-        localPlayer.score += bonusThisClear;
-        addRunScore(bonusThisClear);
+        bonusThisClear += 260;
+        localPlayer.score += 260;
+        addRunScore(260);
         toast("精准刻度命中：额外分数 +260");
         precisionMarker = makePrecisionMarker();
       }
@@ -430,7 +508,7 @@ function clearLines(tag) {
     post("/api/line-clear", { playerId, lines: cleared, tags }).then((data) => {
       localPlayer = data.player;
       localPlayer.score += bonusThisClear;
-      toast(`消除 ${cleared} 行，钟渊 +${cleared}，金币 +${data.reward.total}`);
+      toast(`消除 ${cleared} 行，钟渊 +${cleared}${echoBonusScore ? `，回响分 +${echoBonusScore}` : ""}，金币 +${data.reward.total}`);
       syncHud();
     }).catch(() => {
       toast("服务器结算暂时失败，本局仍可继续");
@@ -590,6 +668,7 @@ function draw() {
   current.matrix.forEach((row, y) => row.forEach((value, x) => {
     if (value) drawCell(boardCtx, current.x + x, current.y + y, current);
   }));
+  drawEchoEffects();
   if (goldFloat) {
     boardCtx.fillStyle = "#f2c14e";
     boardCtx.beginPath();
@@ -719,6 +798,11 @@ function resetGame(startNow = false, forceType = null) {
   triggeredWhispers = new Set();
   whisperQueue = [];
   whisperShowing = false;
+  echoMemory = new Map();
+  echoStacks = 0;
+  echoRipples = [];
+  echoFlashes = [];
+  echoFloats = [];
   document.querySelector("#whisperOverlay")?.classList.remove("show");
   survivalStep = 0;
   modeRemaining = 60;
@@ -883,6 +967,9 @@ function playBell(kind, cleared = 1) {
   } else if (kind === "whisper") {
     ring(ctx, 1046.5, now, 0.34, 0.028);
     ring(ctx, 1568, now + 0.025, 0.28, 0.018);
+  } else if (kind === "echo") {
+    ring(ctx, 196, now, 0.95 + Math.min(3, cleared) * 0.16, 0.055);
+    ring(ctx, 392, now + 0.04, 0.78, 0.032);
   }
 }
 
