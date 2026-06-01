@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>方块战场 · 极乐赌场</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="game-header">
+      <a class="brand" href="/index.html">俄罗斯方块 · 极乐赌场</a>
+      <nav class="main-nav">
+        <a data-nav href="/index.html">大厅</a><a data-nav href="/game.html">方块战场</a><a data-nav href="/market.html">交易市场</a><a data-nav href="/guilds.html">公会</a><a data-nav href="/rankings.html">排行</a><a data-nav href="/chat.html">聊天</a><a data-nav href="/profile.html">资产</a>
+      </nav>
+      <div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div>
+    </header>
+    <main class="page-shell game-page">
+      <section class="game-zone">
+        <div class="topbar">
+          <div><h1>方块战场</h1><p id="eventTicker">赌场正在开盘...</p></div>
+          <div class="player-card"><input id="playerName" maxlength="16" aria-label="玩家昵称"><button id="saveName">保存</button><a class="ghost-link" href="/market.html">去交易市场</a></div>
+        </div>
+        <div class="play-layout">
+          <div class="board-wrap">
+            <canvas id="board" width="300" height="600"></canvas>
+            <div class="touch-controls"><button data-action="left">←</button><button data-action="rotate">↻</button><button data-action="right">→</button><button data-action="drop">⤓</button></div>
+          </div>
+          <aside class="side-panel">
+            <div class="stat-grid">
+              <div><span>金币</span><strong id="coins">1000</strong></div><div><span>分数</span><strong id="score">0</strong></div><div><span>消除</span><strong id="lines">0</strong></div><div><span>护盾</span><strong id="shields">0</strong></div>
+            </div>
+            <div class="next-box"><span>下一块</span><canvas id="next" width="120" height="120"></canvas></div>
+            <div class="actions"><button id="startBtn">开始</button><button id="pauseBtn">暂停</button><button id="restartBtn">重开</button></div>
+            <div class="legend"><b>I 暴击</b><b>O 铁壁</b><b>T 混乱</b><b>L 贪财</b><b>J 冻结</b><b>S 毒雾</b><b>Z 自爆</b></div>
+          </aside>
+        </div>
+      </section>
+      <aside class="panel">
+        <h2>战场事件</h2>
+        <div id="battleFeed" class="event-list"></div>
+      </aside>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

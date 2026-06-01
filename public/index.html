@@ -3,76 +3,59 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>俄罗斯方块 · 极乐赌场</title>
+    <title>极乐赌场大厅</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <main class="app-shell">
-      <section class="game-zone">
-        <div class="topbar">
-          <div>
-            <h1>俄罗斯方块 · 极乐赌场</h1>
-            <p id="eventTicker">赌场正在开盘...</p>
-          </div>
-          <div class="player-card">
-            <input id="playerName" maxlength="16" aria-label="玩家昵称">
-            <button id="saveName">保存</button>
-          </div>
-        </div>
+    <header class="game-header">
+      <a class="brand" href="/index.html">俄罗斯方块 · 极乐赌场</a>
+      <nav class="main-nav">
+        <a data-nav href="/index.html">大厅</a>
+        <a data-nav href="/game.html">方块战场</a>
+        <a data-nav href="/market.html">交易市场</a>
+        <a data-nav href="/guilds.html">公会</a>
+        <a data-nav href="/rankings.html">排行</a>
+        <a data-nav href="/chat.html">聊天</a>
+        <a data-nav href="/profile.html">资产</a>
+      </nav>
+      <div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div>
+    </header>
 
-        <div class="play-layout">
-          <div class="board-wrap">
-            <canvas id="board" width="300" height="600"></canvas>
-            <div class="touch-controls">
-              <button data-action="left">←</button>
-              <button data-action="rotate">↻</button>
-              <button data-action="right">→</button>
-              <button data-action="drop">⤓</button>
-            </div>
-          </div>
-
-          <aside class="side-panel">
-            <div class="stat-grid">
-              <div><span>金币</span><strong id="coins">1000</strong></div>
-              <div><span>分数</span><strong id="score">0</strong></div>
-              <div><span>消除</span><strong id="lines">0</strong></div>
-              <div><span>护盾</span><strong id="shields">0</strong></div>
-            </div>
-            <div class="next-box">
-              <span>下一块</span>
-              <canvas id="next" width="120" height="120"></canvas>
-            </div>
-            <div class="actions">
-              <button id="startBtn">开始</button>
-              <button id="pauseBtn">暂停</button>
-              <button id="restartBtn">重开</button>
-            </div>
-            <div class="legend">
-              <b>I 暴击</b><b>O 铁壁</b><b>T 混乱</b><b>L 贪财</b><b>J 冻结</b><b>S 毒雾</b><b>Z 自爆</b>
-            </div>
-          </aside>
+    <main class="page-shell lobby-grid">
+      <section class="hero-band">
+        <div>
+          <h1>极乐赌场开盘</h1>
+          <p id="nextEvent">系统事件加载中...</p>
         </div>
+        <a class="primary-link" href="/game.html">进入方块战场</a>
       </section>
 
-      <section class="market-zone">
-        <div class="panel">
-          <h2>股票市场</h2>
-          <div id="stocks" class="market-list"></div>
-        </div>
-        <div class="panel">
-          <h2>期货市场</h2>
-          <div id="futures" class="market-list compact"></div>
-        </div>
-        <div class="panel chat-panel">
-          <h2>全局聊天室</h2>
-          <div id="chat" class="chat-log"></div>
-          <form id="chatForm">
-            <input id="chatInput" maxlength="120" placeholder="嘲讽、喊单、认输都可以">
-            <button>发送</button>
-          </form>
-        </div>
+      <section class="panel kpi-row">
+        <div><span>庄家池</span><strong id="bankerPool">0</strong></div>
+        <div><span>公会战</span><strong id="guildWar">等待开赛</strong></div>
+        <div><span>公会 BOSS</span><strong id="bossHpText">加载中</strong><div class="bar"><i id="bossHp"></i></div></div>
+      </section>
+
+      <section class="panel">
+        <h2>股票热榜</h2>
+        <div id="stocks" class="market-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>期货赌场</h2>
+        <div id="futures" class="market-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>今日排行榜</h2>
+        <ol id="dailyRanks" class="rank-list"></ol>
+      </section>
+
+      <section class="panel">
+        <h2>全服情绪</h2>
+        <div id="chat" class="chat-log short"></div>
       </section>
     </main>
-    <script src="/app.js"></script>
+    <script type="module" src="/js/lobby.js"></script>
   </body>
 </html>

@@ -7,6 +7,9 @@ const cols = 10;
 const rows = 20;
 const playerId = localStorage.getItem("casinoPlayerId") || createId();
 localStorage.setItem("casinoPlayerId", playerId);
+document.querySelectorAll("[data-nav]").forEach((link) => {
+  link.classList.toggle("active", link.getAttribute("href") === "/game.html");
+});
 
 const shapes = {
   I: [[1, 1, 1, 1]],
@@ -263,9 +266,12 @@ function syncHud() {
   document.querySelector("#shields").textContent = localPlayer.shields;
   document.querySelector("#playerName").value = localPlayer.name || "";
   document.querySelector("#pauseBtn").textContent = paused ? "继续" : "暂停";
+  document.querySelector("[data-player-name]").textContent = localPlayer.name || "玩家";
+  document.querySelector("[data-player-coins]").textContent = Math.floor(localPlayer.coins).toLocaleString("zh-CN");
 }
 
 function renderMarket(data) {
+  if (!document.querySelector("#stocks") || !document.querySelector("#futures")) return;
   document.querySelector("#stocks").innerHTML = data.stocks.map((s) => `
     <div class="market-row">
       <small>${s.code}</small>
@@ -286,6 +292,7 @@ function renderMarket(data) {
 }
 
 function renderChat(messages) {
+  if (!document.querySelector("#chat")) return;
   document.querySelector("#chat").innerHTML = messages.map((m) => `
     <div class="message ${m.kind}">
       <strong>${escapeHtml(m.author)}</strong>
@@ -311,6 +318,12 @@ async function getState() {
     syncHud();
     renderMarket(data);
     renderChat(data.messages);
+    const online = document.querySelector("[data-online]");
+    if (online) online.textContent = data.onlinePlayers;
+    const feed = document.querySelector("#battleFeed");
+    if (feed) {
+      feed.innerHTML = data.announcements.map((item) => `<div><b>${item.title}</b><span>${item.text}</span></div>`).join("");
+    }
   } catch (error) {
     toast("连接服务器失败，正在重试...");
   }

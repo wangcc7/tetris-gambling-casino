@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>交易市场</title><link rel="stylesheet" href="/styles.css"></head>
+  <body>
+    <header class="game-header"><a class="brand" href="/index.html">俄罗斯方块 · 极乐赌场</a><nav class="main-nav"><a data-nav href="/index.html">大厅</a><a data-nav href="/game.html">方块战场</a><a data-nav href="/market.html">交易市场</a><a data-nav href="/guilds.html">公会</a><a data-nav href="/rankings.html">排行</a><a data-nav href="/chat.html">聊天</a><a data-nav href="/profile.html">资产</a></nav><div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div></header>
+    <main class="page-shell two-col">
+      <section class="panel"><h1>股票市场</h1><div id="stocks" class="market-list"></div></section>
+      <section class="panel"><h1>期货市场</h1><div id="futures" class="market-list"></div></section>
+      <section class="panel trade-desk"><h2>股票委托</h2><select id="stockCode"><option>000001</option><option>600519</option><option>002475</option><option>300750</option><option>000858</option><option>601318</option><option>688981</option><option>000002</option></select><input id="stockLots" type="number" value="1" min="1"><button id="stockBuy">买入 1 手</button><p class="muted">T+1、涨跌停和手续费由服务端规则控制。</p></section>
+      <section class="panel trade-desk"><h2>期货开仓</h2><select id="futureCode"><option>BTC</option><option>GOLD</option><option>TETRIS</option></select><select id="futureSide"><option value="long">做多</option><option value="short">做空</option></select><select id="futureLev"><option>1</option><option>2</option><option>5</option><option>10</option><option>20</option></select><button id="futureOpen">开仓</button></section>
+      <section class="panel"><h2>我的持仓</h2><div id="portfolio"></div></section>
+      <section class="panel"><h2>市场事件</h2><ul id="marketEvents" class="event-list"></ul><p id="eventTicker" data-toast class="muted">等待盘口...</p></section>
+    </main>
+    <script type="module" src="/js/market.js"></script>
+  </body>
+</html>

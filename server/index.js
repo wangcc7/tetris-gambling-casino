@@ -38,16 +38,28 @@ const futures = [
 ];
 
 const npcs = [
-  ["老韭菜", "要崩了要崩了，我先跑一步。"],
-  ["李老师", "内幕票已经放出来了，懂的都懂。"],
-  ["王姐", "刚又赚了一波，收益图就不发了怕你们眼红。"],
-  ["程序员", "庄家代码绝对有后门，这走势不像随机数。"],
-  ["神秘人", "内幕：新能源尾盘可能有动作，准确率五五开。"],
-  ["庄家", "你们的止损线，我看得很清楚。"],
-  ["天台保安", "今天预约人数略多，请大家排队。"],
-  ["量化小哥", "模型显示，情绪越亢奋，回撤越礼貌。"],
-  ["镰刀实习生", "刚入职，先从收割模拟盘开始。"],
-  ["韭菜导师", "别怕，越跌越买，直到没有金币。"]
+  { name: "老韭菜", personality: "悲观", strategy: "经常喊崩盘，偶尔蒙对", line: "要崩了要崩了，我先跑一步。" },
+  { name: "李老师", personality: "骗子", strategy: "喊单后反向操作", line: "内幕票已经放出来了，懂的都懂。" },
+  { name: "王姐", personality: "大妈", strategy: "晒收益图吸引跟买", line: "刚又赚了一波，收益图就不发了怕你们眼红。" },
+  { name: "程序员", personality: "吐槽", strategy: "质疑庄家代码", line: "庄家代码绝对有后门，这走势不像随机数。" },
+  { name: "神秘人", personality: "内幕", strategy: "50% 准确率内幕", line: "内幕：新能源尾盘可能有动作，准确率五五开。" },
+  { name: "庄家", personality: "镰刀", strategy: "嘲讽亏损玩家", line: "你们的止损线，我看得很清楚。" },
+  { name: "天台保安", personality: "冷幽默", strategy: "亏损事件刷存在感", line: "今天预约人数略多，请大家排队。" },
+  { name: "量化小哥", personality: "理性疯", strategy: "解释一切波动", line: "模型显示，情绪越亢奋，回撤越礼貌。" },
+  { name: "镰刀实习生", personality: "新人", strategy: "庄家跟班", line: "刚入职，先从收割模拟盘开始。" },
+  { name: "韭菜导师", personality: "反向导师", strategy: "鼓励越跌越买", line: "别怕，越跌越买，直到没有金币。" }
+];
+
+const guilds = [
+  { id: "g-sickle", name: "镰刀研究院", level: 5, members: 37, treasury: 18888 },
+  { id: "g-leek", name: "天选韭菜团", level: 3, members: 24, treasury: 7600 },
+  { id: "g-tetris", name: "长条信仰会", level: 2, members: 16, treasury: 4200 }
+];
+
+const marketEvents = [
+  "黑色星期一预警：高控盘股票散户热度过高时容易跳水",
+  "政策利好传闻：白酒板块有 NPC 正在喊单",
+  "交易所故障演练：后续将加入限时无法卖出事件"
 ];
 
 const state = {
@@ -61,6 +73,17 @@ const state = {
   announcements: [],
   stocks,
   futures,
+  guilds,
+  marketEvents,
+  guildBoss: {
+    name: "巨大化方块 BOSS",
+    window: "20:00-20:15",
+    hpPercent: 83
+  },
+  guildWar: {
+    status: "周六 20:00 开赛",
+    rule: "10v10 俄罗斯方块对决，总胜场更多的一方获得报名费奖池。"
+  },
   economy: {
     initialCoins: 1000,
     lineReward: 10,
@@ -158,6 +181,10 @@ function ensurePlayer(id) {
       lines: 0,
       shields: 0,
       harvested: 0,
+      positions: [],
+      titles: ["新晋韭菜"],
+      guildId: null,
+      lastSignin: null,
       banned: false,
       updatedAt: Date.now()
     };
@@ -167,8 +194,18 @@ function ensurePlayer(id) {
 }
 
 function snapshot(playerId) {
-  const player = ensurePlayer(playerId);
-  player.updatedAt = Date.now();
+  const player = playerId ? ensurePlayer(playerId) : {
+    id: "admin-view",
+    name: "后台观察者",
+    coins: 0,
+    score: 0,
+    lines: 0,
+    shields: 0,
+    harvested: 0,
+    positions: [],
+    titles: []
+  };
+  if (playerId) player.updatedAt = Date.now();
   state.onlinePlayers = Object.values(state.players).filter((p) => Date.now() - p.updatedAt < 45000).length;
   return {
     serverTime: new Date().toISOString(),
@@ -180,9 +217,36 @@ function snapshot(playerId) {
     inflation: state.inflation,
     messages: state.messages,
     announcements: state.announcements.slice(0, 12),
+    guilds: state.guilds,
+    guildBoss: state.guildBoss,
+    guildWar: state.guildWar,
+    marketEvents: state.marketEvents,
+    npcs,
+    leaderboards: leaderboards(),
     economy: state.economy,
     nextEventIn: Math.max(0, state.flags.nextEventAt - Date.now()),
     onlinePlayers: state.onlinePlayers
+  };
+}
+
+function leaderboards() {
+  const players = Object.values(state.players);
+  const fallback = [
+    { name: "老韭菜", value: 9066 },
+    { name: "王姐", value: 7300 },
+    { name: "量化小哥", value: 6666 },
+    { name: "神秘人", value: 5200 },
+    { name: "镰刀实习生", value: 4300 }
+  ];
+  const byLines = players.map((p) => ({ name: p.name, value: p.lines })).sort((a, b) => b.value - a.value);
+  const byScore = players.map((p) => ({ name: p.name, value: p.score })).sort((a, b) => b.value - a.value);
+  const byCoins = players.map((p) => ({ name: p.name, value: p.coins })).sort((a, b) => b.value - a.value);
+  const byHarvested = players.map((p) => ({ name: p.name, value: p.harvested })).sort((a, b) => b.value - a.value);
+  return {
+    daily: [...byLines, ...fallback].slice(0, 10),
+    profit: [...byCoins, ...fallback].slice(0, 10),
+    jackpot: [...byScore, ...fallback].slice(0, 10),
+    harvested: [...byHarvested, { name: "天台保安", value: 99 }, ...fallback].slice(0, 10)
   };
 }
 
@@ -272,6 +336,31 @@ function adminAction(action, payload) {
   }
 }
 
+function tradeStock(player, code, lots) {
+  const stock = state.stocks.find((item) => item.code === code);
+  if (!stock) return { ok: false, error: "stock not found" };
+  const qty = Math.max(1, Number(lots || 1)) * 100;
+  const cost = Math.round(stock.price * qty * (1 + state.economy.stockFee));
+  if (player.coins < cost) return { ok: false, error: "金币不足" };
+  player.coins -= cost;
+  player.positions.push({ type: "stock", code, qty, cost, day: new Date().toISOString().slice(0, 10) });
+  stock.retailHeat = Math.min(100, stock.retailHeat + 8);
+  pushMessage("交易所", `${player.name} 买入 ${stock.name} ${qty} 股，庄家已记录成本线`, "event");
+  return { ok: true, player };
+}
+
+function openFuture(player, code, side, leverage) {
+  const future = state.futures.find((item) => item.code === code);
+  if (!future) return { ok: false, error: "future not found" };
+  const lev = Math.max(1, Math.min(20, Number(leverage || 1)));
+  const margin = 100 * lev;
+  if (player.coins < margin) return { ok: false, error: "金币不足" };
+  player.coins -= margin;
+  player.positions.push({ type: "future", code, side, qty: `${lev}x`, cost: margin, entry: future.price });
+  pushMessage("期货广播", `${player.name} ${side === "short" ? "做空" : "做多"} ${code} ${lev}x，爆仓线已点亮`, "danger");
+  return { ok: true, player };
+}
+
 async function api(req, res) {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname === "/api/state") return sendJson(res, snapshot(url.searchParams.get("playerId")));
@@ -286,12 +375,67 @@ async function api(req, res) {
     if (body.name) player.name = String(body.name).slice(0, 16);
     return sendJson(res, { player });
   }
+  if (url.pathname === "/api/player/signin" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = ensurePlayer(body.playerId);
+    const today = new Date().toISOString().slice(0, 10);
+    if (player.lastSignin !== today) {
+      player.coins += 500;
+      player.lastSignin = today;
+      pushMessage("系统", `${player.name} 每日签到领取 500 金币`, "system");
+    }
+    return sendJson(res, { player });
+  }
   if (url.pathname === "/api/chat" && req.method === "POST") {
     const body = await readBody(req);
     const player = ensurePlayer(body.playerId);
     if (state.flags.globalMuted) return sendJson(res, { ok: false, error: "全局禁言中" }, 403);
     pushMessage(player.name, String(body.text || "").slice(0, 120), "chat");
     return sendJson(res, { ok: true, messages: state.messages });
+  }
+  if (url.pathname === "/api/chat/red-packet" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = ensurePlayer(body.playerId);
+    const amount = Math.max(100, Number(body.amount || 100));
+    if (player.coins >= amount) {
+      player.coins -= amount;
+      pushMessage("红包雨", `${player.name} 发出 ${amount} 金币红包，手慢无`, "event");
+    }
+    return sendJson(res, { ok: true, player, messages: state.messages });
+  }
+  if (url.pathname === "/api/trade/stock" && req.method === "POST") {
+    const body = await readBody(req);
+    const result = tradeStock(ensurePlayer(body.playerId), body.code, body.lots);
+    return sendJson(res, result, result.ok ? 200 : 400);
+  }
+  if (url.pathname === "/api/trade/future" && req.method === "POST") {
+    const body = await readBody(req);
+    const result = openFuture(ensurePlayer(body.playerId), body.code, body.side, body.leverage);
+    return sendJson(res, result, result.ok ? 200 : 400);
+  }
+  if (url.pathname === "/api/guild/create" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = ensurePlayer(body.playerId);
+    if (player.coins >= 1000) {
+      player.coins -= 1000;
+      const guild = { id: `g-${crypto.randomUUID().slice(0, 8)}`, name: String(body.name || "新公会").slice(0, 16), level: 1, members: 1, treasury: 1000 };
+      state.guilds.unshift(guild);
+      player.guildId = guild.id;
+      pushMessage("公会", `${player.name} 创建了公会 ${guild.name}`, "event");
+      return sendJson(res, { ok: true, guild, player });
+    }
+    return sendJson(res, { ok: false, error: "金币不足" }, 400);
+  }
+  if (url.pathname === "/api/guild/join" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = ensurePlayer(body.playerId);
+    const guild = state.guilds.find((item) => item.id === body.guildId);
+    if (guild) {
+      guild.members = Math.min(50, guild.members + 1);
+      player.guildId = guild.id;
+      pushMessage("公会", `${player.name} 加入了 ${guild.name}`, "event");
+    }
+    return sendJson(res, { ok: Boolean(guild), guild, player });
   }
   res.writeHead(404);
   res.end("Not found");
@@ -340,8 +484,8 @@ http.createServer((req, res) => {
 
 setInterval(moveMarket, 4000);
 setInterval(() => {
-  const [author, text] = npcs[Math.floor(Math.random() * npcs.length)];
-  pushMessage(author, text);
+  const npc = npcs[Math.floor(Math.random() * npcs.length)];
+  pushMessage(npc.name, npc.line);
 }, 9000);
 setInterval(() => {
   if (Date.now() >= state.flags.nextEventAt) triggerWorldEvent();
