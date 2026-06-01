@@ -3,6 +3,8 @@ import { loadState, renderShellStatus, renderStocks, renderFutures, renderChat, 
 async function render() {
   const state = await loadState();
   renderShellStatus(state);
+  document.querySelector(".hero-band h1").textContent = state.world.name;
+  document.querySelector(".hero-band p").textContent = state.world.premise;
   renderStocks(state.stocks.slice(0, 4), "#stocks");
   renderFutures(state.futures, "#futures");
   renderChat(state.messages.slice(0, 8), "#chat");

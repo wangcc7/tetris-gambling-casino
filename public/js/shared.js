@@ -8,9 +8,24 @@ export function createId() {
 }
 
 export function getPlayerId() {
-  const id = localStorage.getItem(playerKey) || createId();
+  const session = getSession();
+  const id = session.playerId || localStorage.getItem(playerKey) || createId();
   localStorage.setItem(playerKey, id);
   return id;
+}
+
+export function getSession() {
+  try {
+    return JSON.parse(localStorage.getItem("casinoSession") || "{}");
+  } catch {
+    localStorage.removeItem("casinoSession");
+    return {};
+  }
+}
+
+export function setSession(session) {
+  localStorage.setItem("casinoSession", JSON.stringify(session));
+  if (session.playerId) localStorage.setItem(playerKey, session.playerId);
 }
 
 export async function api(path, options = {}) {
@@ -64,6 +79,8 @@ export function renderShellStatus(state) {
   if (coin) coin.textContent = money(state.player.coins);
   if (name) name.textContent = state.player.name;
   if (online) online.textContent = state.onlinePlayers;
+  const authName = document.querySelector("[data-auth-name]");
+  if (authName) authName.textContent = getSession().accountName || "游客身份";
 }
 
 export function renderChat(messages, target = "#chat") {
@@ -71,6 +88,7 @@ export function renderChat(messages, target = "#chat") {
   if (!el) return;
   el.innerHTML = messages.map((m) => `
     <div class="message ${escapeHtml(m.kind)}">
+      <small>${escapeHtml(m.channel || "世界")}</small>
       <strong>${escapeHtml(m.author)}</strong>
       <span>${escapeHtml(m.text)}</span>
     </div>
@@ -108,6 +126,56 @@ export function toast(text) {
 
 export function startPage(fn, interval = 2500) {
   setActiveNav();
+  mountAuthDock();
   fn();
   return setInterval(fn, interval);
+}
+
+export function mountAuthDock() {
+  const header = document.querySelector(".game-header");
+  if (!header || document.querySelector("#authDock")) return;
+  const session = getSession();
+  const dock = document.createElement("div");
+  dock.id = "authDock";
+  dock.className = "auth-dock";
+  dock.innerHTML = `
+    <button id="authToggle">${session.accountName ? escapeHtml(session.accountName) : "登录 / 注册"}</button>
+    <div id="authPanel" class="auth-panel hidden">
+      <b>户籍柜台</b>
+      <input id="authUser" placeholder="账号">
+      <input id="authPass" type="password" placeholder="密码">
+      <input id="authName" placeholder="角色名">
+      <div class="auth-actions">
+        <button id="loginBtn">登录</button>
+        <button id="registerBtn">注册</button>
+      </div>
+      <small>注册后会绑定你的方块矿工身份。</small>
+    </div>
+  `;
+  header.appendChild(dock);
+  document.querySelector("#authToggle").addEventListener("click", () => {
+    if (getSession().accountName) {
+      if (confirm("退出当前账号？")) {
+        localStorage.removeItem("casinoSession");
+        location.reload();
+      }
+      return;
+    }
+    document.querySelector("#authPanel").classList.toggle("hidden");
+  });
+  document.querySelector("#loginBtn").addEventListener("click", () => authAction("login"));
+  document.querySelector("#registerBtn").addEventListener("click", () => authAction("register"));
+}
+
+async function authAction(mode) {
+  const username = document.querySelector("#authUser").value.trim();
+  const password = document.querySelector("#authPass").value;
+  const displayName = document.querySelector("#authName").value.trim();
+  try {
+    const data = await post(`/api/auth/${mode}`, { username, password, displayName });
+    setSession({ playerId: data.player.id, accountName: data.account.username });
+    location.reload();
+  } catch {
+    alert(mode === "login" ? "登录失败，请检查账号密码" : "注册失败，请换一个账号或检查密码");
+  }
 }

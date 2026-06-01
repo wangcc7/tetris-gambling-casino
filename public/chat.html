@@ -4,8 +4,15 @@
   <body>
     <header class="game-header"><a class="brand" href="/index.html">俄罗斯方块 · 极乐赌场</a><nav class="main-nav"><a data-nav href="/index.html">大厅</a><a data-nav href="/game.html">方块战场</a><a data-nav href="/market.html">交易市场</a><a data-nav href="/guilds.html">公会</a><a data-nav href="/rankings.html">排行</a><a data-nav href="/chat.html">聊天</a><a data-nav href="/profile.html">资产</a></nav><div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div></header>
     <main class="page-shell chat-layout">
-      <section class="panel chat-panel-full"><h1>全局聊天室</h1><div id="chat" class="chat-log tall"></div><form id="chatForm"><input id="chatInput" maxlength="120" placeholder="喊单、嘲讽、发疯、认输"><button>发送</button></form><button id="redPacket">发 100 金币红包</button></section>
-      <section class="panel"><h2>AI NPC</h2><div id="npcList" class="npc-list"></div></section>
+      <section class="panel chat-panel-full">
+        <h1>极乐广播台</h1>
+        <p id="worldPremise" class="muted">世界频道加载中...</p>
+        <div class="channel-tabs"><button data-channel="世界" class="active">世界</button><button data-channel="市场">市场</button><button data-channel="公会">公会</button><button data-channel="战场">战场</button></div>
+        <div id="chat" class="chat-log tall"></div>
+        <form id="chatForm"><input id="chatInput" maxlength="120" placeholder="向交易城广播一句话"><button>发送</button></form>
+        <button id="redPacket">发 100 金币红包</button>
+      </section>
+      <section class="panel"><h2>广播台演员表</h2><div id="npcList" class="npc-list"></div></section>
     </main>
     <script type="module" src="/js/chat.js"></script>
   </body>

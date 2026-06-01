@@ -5,7 +5,7 @@ const nextCtx = nextCanvas.getContext("2d");
 const cell = 30;
 const cols = 10;
 const rows = 20;
-const playerId = localStorage.getItem("casinoPlayerId") || createId();
+const playerId = getStoredPlayerId();
 localStorage.setItem("casinoPlayerId", playerId);
 document.querySelectorAll("[data-nav]").forEach((link) => {
   link.classList.toggle("active", link.getAttribute("href") === "/game.html");
@@ -40,7 +40,9 @@ let last = 0;
 let dropCounter = 0;
 let dropInterval = 820;
 let goldFloat = null;
+let gameOver = false;
 let localPlayer = { coins: 1000, score: 0, lines: 0, shields: 0, name: "玩家" };
+const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"]);
 
 function createId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -48,6 +50,16 @@ function createId() {
   }
   const random = Math.random().toString(36).slice(2);
   return `p-${Date.now().toString(36)}-${random}`;
+}
+
+function getStoredPlayerId() {
+  try {
+    const session = JSON.parse(localStorage.getItem("casinoSession") || "{}");
+    if (session.playerId) return session.playerId;
+  } catch {
+    localStorage.removeItem("casinoSession");
+  }
+  return localStorage.getItem("casinoPlayerId") || createId();
 }
 
 function emptyGrid() {
@@ -129,6 +141,7 @@ function nextPiece() {
       toast("铁壁护盾抵挡了一次死亡");
     } else {
       running = false;
+      gameOver = true;
       toast("爆仓式失败，点击重开");
     }
   }
@@ -250,13 +263,24 @@ function rotateCurrent() {
   }
 }
 
-function resetGame() {
+function resetGame(startNow = false) {
   grid = emptyGrid();
   current = makePiece();
   next = makePiece();
+  running = startNow;
+  paused = false;
+  gameOver = false;
+  dropCounter = 0;
+  drawNext();
+  toast(startNow ? "方块战场已开局" : "点击开始，进入方块战场");
+}
+
+function startGame() {
+  if (gameOver) resetGame(true);
   running = true;
   paused = false;
-  drawNext();
+  syncHud();
+  toast("方块战场已开局");
 }
 
 function syncHud() {
@@ -340,26 +364,29 @@ async function post(url, body) {
 }
 
 document.addEventListener("keydown", (event) => {
-  if (!running || paused) return;
+  if (!controlKeys.has(event.code) && !controlKeys.has(event.key)) return;
+  const tag = event.target && event.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  event.preventDefault();
+  if (!running) startGame();
+  if (paused) return;
   if (event.key === "ArrowLeft") move(-1);
   if (event.key === "ArrowRight") move(1);
   if (event.key === "ArrowDown") drop();
   if (event.key === "ArrowUp") rotateCurrent();
   if (event.code === "Space") {
-    event.preventDefault();
     hardDrop();
   }
 });
 
 document.querySelector("#startBtn").addEventListener("click", () => {
-  running = true;
-  paused = false;
+  startGame();
 });
 document.querySelector("#pauseBtn").addEventListener("click", () => {
   paused = !paused;
   syncHud();
 });
-document.querySelector("#restartBtn").addEventListener("click", resetGame);
+document.querySelector("#restartBtn").addEventListener("click", () => resetGame(true));
 document.querySelector("#saveName").addEventListener("click", async () => {
   try {
     const data = await post("/api/player", { playerId, name: document.querySelector("#playerName").value });
@@ -369,20 +396,25 @@ document.querySelector("#saveName").addEventListener("click", async () => {
     toast("昵称保存失败，稍后再试");
   }
 });
-document.querySelector("#chatForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const input = document.querySelector("#chatInput");
-  if (!input.value.trim()) return;
-  try {
-    const data = await post("/api/chat", { playerId, text: input.value.trim() });
-    input.value = "";
-    if (data.messages) renderChat(data.messages);
-  } catch {
-    toast("聊天发送失败");
-  }
-});
+const chatForm = document.querySelector("#chatForm");
+if (chatForm) {
+  chatForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = document.querySelector("#chatInput");
+    if (!input.value.trim()) return;
+    try {
+      const data = await post("/api/chat", { playerId, text: input.value.trim() });
+      input.value = "";
+      if (data.messages) renderChat(data.messages);
+    } catch {
+      toast("聊天发送失败");
+    }
+  });
+}
 document.querySelectorAll(".touch-controls button").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (!running) startGame();
     const action = button.dataset.action;
     if (action === "left") move(-1);
     if (action === "right") move(1);
@@ -405,6 +437,6 @@ setInterval(() => {
 }, 3000);
 
 setInterval(getState, 2500);
-resetGame();
+resetGame(false);
 getState();
 requestAnimationFrame(update);

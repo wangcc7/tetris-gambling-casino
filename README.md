@@ -49,6 +49,8 @@
 
 当前采用轻量多页面架构，先把产品边界拆清楚，避免所有功能塞在一个页面里。
 
+世界观与文案约束见：[docs/WORLDVIEW.md](docs/WORLDVIEW.md)
+
 ```text
 玩家端 8080
 ├── 大厅 /index.html

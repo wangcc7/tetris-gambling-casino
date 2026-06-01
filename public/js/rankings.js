@@ -4,10 +4,10 @@ async function render() {
   const state = await loadState();
   renderShellStatus(state);
   const groups = [
-    ["韭菜王者", state.leaderboards.daily],
-    ["赌神榜", state.leaderboards.profit],
-    ["暴发户榜", state.leaderboards.jackpot],
-    ["黑奴榜", state.leaderboards.harvested]
+    ["韭菜王者 · 消除行数", state.leaderboards.daily],
+    ["赌神榜 · 净盈利", state.leaderboards.profit],
+    ["暴发户榜 · 战场分数", state.leaderboards.jackpot],
+    ["黑奴榜 · 被收割次数", state.leaderboards.harvested]
   ];
   document.querySelector("#rankGroups").innerHTML = groups.map(([title, rows]) => `
     <section class="panel">
