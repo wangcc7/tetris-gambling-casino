@@ -22,19 +22,19 @@ const shapes = {
 };
 
 const attrs = {
-  I: { tag: "crit", label: "暴", color: "#35d7e8" },
-  O: { tag: "shield", label: "盾", color: "#f2c14e" },
-  T: { tag: "chaos", label: "乱", color: "#b879ff" },
-  L: { tag: "greed", label: "财", color: "#ff9f43" },
-  J: { tag: "freeze", label: "冻", color: "#4d8dff" },
-  S: { tag: "poison", label: "毒", color: "#45d483" },
-  Z: { tag: "bomb", label: "爆", color: "#ff5c6c" }
+  I: { tag: "crit", label: "钟", color: "#35d7e8" },
+  O: { tag: "shield", label: "守", color: "#f2c14e" },
+  T: { tag: "chaos", label: "谜", color: "#b879ff" },
+  L: { tag: "greed", label: "筹", color: "#ff9f43" },
+  J: { tag: "freeze", label: "止", color: "#4d8dff" },
+  S: { tag: "poison", label: "雾", color: "#45d483" },
+  Z: { tag: "bomb", label: "终", color: "#ff5c6c" }
 };
 
 const specialModifiers = {
-  rewind: { name: "时间倒流", label: "时", color: "#d6f7ff", desc: "消行后棋盘回退到数步前，但奖励保留" },
+  rewind: { name: "时间倒流", label: "返", color: "#d6f7ff", desc: "消行后棋盘回退到数步前，但奖励保留" },
   pendulum: { name: "钟摆", label: "摆", color: "#ffe08a", desc: "落地前会左右摆动 1 秒" },
-  curse: { name: "诅咒", label: "咒", color: "#f06aff", desc: "所在满行必须一次消除 2 行以上才会真正清掉" }
+  curse: { name: "诅咒", label: "禁", color: "#f06aff", desc: "所在满行必须一次消除 2 行以上才会真正清掉" }
 };
 
 const modeNames = {
@@ -597,7 +597,7 @@ function clearLines(tag) {
     advanceFinale(cleared);
     if (tag === "greed" && goldFloat) {
       localPlayer.coins += goldFloat.value;
-      toast(`贪财拾取 +${goldFloat.value} 金币`);
+      toast(`筹码共鸣拾取 +${goldFloat.value} 金币`);
       goldFloat = null;
     }
     if (dying && cleared >= 3) {
@@ -651,7 +651,7 @@ function nextPiece() {
       localPlayer.shields -= 1;
       grid.splice(rows - 1, 1);
       grid.unshift(Array(cols).fill(null));
-      toast("铁壁护盾抵挡了一次死亡");
+      toast("守命护盾抵挡了一次死亡");
     } else if (!dying) {
       dying = true;
       dyingLocks = 3;
@@ -689,7 +689,7 @@ function drop() {
   merge(current);
   if (current.tag === "shield") {
     localPlayer.shields += 1;
-    toast("铁壁生成 1 个护盾");
+    toast("守命生成 1 个护盾");
   }
   if (current.tag === "bomb") {
     addGarbageLine();
@@ -743,7 +743,7 @@ function hardDrop() {
 function addGarbageLine() {
   const hole = Math.floor(Math.random() * cols);
   grid.shift();
-  grid.push(Array.from({ length: cols }, (_, index) => index === hole ? null : { color: "#5f2633", label: "罚", tag: "garbage" }));
+  grid.push(Array.from({ length: cols }, (_, index) => index === hole ? null : { color: "#5f2633", label: "尘", tag: "garbage" }));
 }
 
 function drawCell(ctx, x, y, block, size = cell) {
@@ -761,17 +761,28 @@ function drawCell(ctx, x, y, block, size = cell) {
   ctx.beginPath();
   ctx.arc(left + size / 2, top + size / 2, size * 0.28, 0, Math.PI * 2);
   ctx.stroke();
+  for (let i = 0; i < 8; i++) {
+    const angle = (Math.PI * 2 * i) / 8;
+    const inner = size * 0.31;
+    const outer = size * 0.39;
+    ctx.beginPath();
+    ctx.moveTo(left + size / 2 + Math.cos(angle) * inner, top + size / 2 + Math.sin(angle) * inner);
+    ctx.lineTo(left + size / 2 + Math.cos(angle) * outer, top + size / 2 + Math.sin(angle) * outer);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(53, 215, 232, .24)";
   ctx.beginPath();
-  ctx.moveTo(left + size * 0.2, top + size * 0.5);
-  ctx.lineTo(left + size * 0.8, top + size * 0.5);
-  ctx.moveTo(left + size * 0.5, top + size * 0.2);
-  ctx.lineTo(left + size * 0.5, top + size * 0.8);
+  ctx.moveTo(left + size * 0.27, top + size * 0.72);
+  ctx.lineTo(left + size * 0.72, top + size * 0.27);
   ctx.stroke();
-  ctx.fillStyle = "#071017";
-  ctx.font = `${Math.floor(size * 0.5)}px sans-serif`;
+  ctx.fillStyle = "#061016";
+  ctx.shadowColor = "rgba(242, 193, 78, .58)";
+  ctx.shadowBlur = size * 0.16;
+  ctx.font = `700 ${Math.floor(size * 0.48)}px serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(block.rune || block.label, left + size / 2, top + size / 2);
+  ctx.shadowBlur = 0;
 }
 
 function draw() {
@@ -968,7 +979,7 @@ async function startGame() {
   paused = false;
   if (!modeStartedAt) modeStartedAt = Date.now();
   syncHud();
-  toast(forceType ? "暴击幸运块生效：长条进场" : `${modeNames[gameMode]} 已开局`);
+  toast(forceType ? "回声长条生效：钟鸣进场" : `${modeNames[gameMode]} 已开局`);
 }
 
 function syncHud() {

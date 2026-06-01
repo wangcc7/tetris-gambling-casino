@@ -272,6 +272,27 @@ body::after {
   color: var(--muted);
 }
 
+.npc-profile {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(242, 193, 78, .24);
+}
+
+.npc-profile::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--gold), var(--cyan));
+  opacity: .85;
+}
+
+.npc-profile p {
+  margin: 9px 0 0;
+  color: #f7e6b1;
+  line-height: 1.55;
+}
+
 .bar {
   height: 8px;
   margin-top: 8px;

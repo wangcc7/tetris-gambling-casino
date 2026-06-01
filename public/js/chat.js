@@ -11,7 +11,12 @@ async function render() {
     <article class="npc-card"><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.source || "新闻")}</span><small>${escapeHtml(item.time || "")}</small></article>
   `).join("");
   document.querySelector("#npcList").innerHTML = state.npcs.map((npc) => `
-    <article class="npc-card"><b>${escapeHtml(npc.name)}</b><span>${escapeHtml(npc.personality)}</span><small>${escapeHtml(npc.strategy)}</small></article>
+    <article class="npc-card npc-profile">
+      <b>${escapeHtml(npc.name)}</b>
+      <span>${escapeHtml(npc.personality)}</span>
+      <small>${escapeHtml(npc.strategy)}</small>
+      <p>${escapeHtml(npc.line)}</p>
+    </article>
   `).join("");
 }
 

@@ -13,7 +13,7 @@ async function render() {
   `;
   document.querySelector("#titles").innerHTML = state.player.titles.map((title) => `<b>${escapeHtml(title)}</b>`).join("");
   document.querySelector("#inventory").innerHTML = `
-    <div class="asset-row"><b>暴击幸运块</b><span>下一局加成道具</span><em>${money(state.player.inventory?.luckyBlocks || 0)}</em></div>
+    <div class="asset-row"><b>回声长条</b><span>下一局钟鸣道具</span><em>${money(state.player.inventory?.luckyBlocks || 0)}</em></div>
     <div class="asset-row"><b>皮肤券</b><span>${escapeHtml((state.player.inventory?.skins || []).join("、") || "暂无")}</span><em>${(state.player.inventory?.skins || []).length}</em></div>
   `;
   document.querySelector("#positions").innerHTML = state.player.positions.length

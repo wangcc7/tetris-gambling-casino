@@ -12,7 +12,7 @@ const playerPort = Number(process.env.PLAYER_PORT || 8080);
 const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
 const adminPassword = process.env.ADMIN_PASSWORD || "gambleMaster666";
-const appVersion = process.env.APP_VERSION || "0.6.0-jidao";
+const appVersion = process.env.APP_VERSION || "0.6.1-zhongyan";
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",
   port: Number(process.env.DB_PORT || 3306),
@@ -94,7 +94,7 @@ const missionTemplates = [
 ];
 
 const shopItems = [
-  { id: "lucky_crit", name: "回声长条", desc: "下一局开局强制获得暴击长条", price: 200, type: "buff" },
+  { id: "lucky_crit", name: "回声长条", desc: "下一局开局强制获得钟鸣长条", price: 200, type: "buff" },
   { id: "shield_pack", name: "护命钟壳", desc: "立即获得 1 个护盾", price: 300, type: "shield" },
   { id: "rumor_ticket", name: "雾区纸条", desc: "向市场事件池投放一条传闻", price: 150, type: "rumor" },
   { id: "sickle_skin", name: "生肖残印", desc: "获得称号：钟城见证者", price: 888, type: "title" }
@@ -590,7 +590,7 @@ function buyShopItem(player, itemId) {
 function useItem(player, itemId) {
   if (itemId === "lucky_crit" && player.inventory.luckyBlocks > 0) {
     player.inventory.luckyBlocks -= 1;
-    pushMessage("战场柜台", `${player.name} 消耗暴击幸运块，下一局长条优先`, "event", "战场");
+    pushMessage("战场柜台", `${player.name} 消耗回声长条，下一局钟鸣长条优先`, "event", "战场");
     return { ok: true, player, effect: { forcePiece: "I" } };
   }
   return { ok: false, error: "道具不可用" };
@@ -803,7 +803,7 @@ function settleLines(player, lines, tags = []) {
   player.score += lines * 100 + total;
   player.lines += lines;
   if (tags.includes("shield")) player.shields += 1;
-  if (tags.includes("bomb")) pushMessage("战场广播", `${player.name} 自爆了，拿走 300 分但头顶开始发凉`, "danger", "战场");
+  if (tags.includes("bomb")) pushMessage("战场广播", `${player.name} 触发终焉反噬，拿走 300 分但头顶开始发凉`, "danger", "战场");
   return { total, base, crit, selfBoom };
 }
 
@@ -834,7 +834,7 @@ function triggerWorldEvent() {
     ["牛市方块", "全服在线玩家 +50 金币", () => Object.values(state.players).forEach((p) => { p.coins += 50; })],
     ["熊市方块", "当前钟渊池吞入 100 金币", () => { state.bankerPool += 100; }],
     ["内幕消息方块", "内幕：TETRIS 指数即将大幅波动，准确率 70%", () => {}],
-    ["试炼者祝福", "下一块更容易出现暴击属性", () => {}],
+    ["试炼者祝福", "下一块更容易出现钟鸣属性", () => {}],
     ["生肖诅咒", "全场旋转手感开始变硬", () => {}]
   ];
   const event = events[Math.floor(Math.random() * events.length)];

@@ -1,8 +1,8 @@
 {
   "name": "tetris-gambling-casino",
-  "version": "0.1.0",
+  "version": "0.6.1",
   "private": true,
-  "description": "俄罗斯方块 · 极乐赌场 prototype",
+  "description": "终焉钟城 · 钟渊试炼 prototype",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js"
