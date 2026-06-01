@@ -904,7 +904,8 @@ async function refreshRealStocks() {
 
 async function refreshNews() {
   try {
-    const res = await fetch("https://np-listapi.eastmoney.com/comm/web/getNewsByColumns?client=web&biz=web_news_col&column=351&order=1&needInteractData=0&page_index=1&page_size=12", { headers: { "user-agent": "Mozilla/5.0" } });
+    const trace = `casino_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const res = await fetch(`https://np-listapi.eastmoney.com/comm/web/getNewsByColumns?client=web&biz=web_news_col&column=351&order=1&needInteractData=0&page_index=1&page_size=12&req_trace=${trace}`, { headers: { "user-agent": "Mozilla/5.0" } });
     const data = await res.json();
     const list = data.data?.list || data.data || [];
     externalData.news = list.slice(0, 10).map((item) => ({
@@ -913,6 +914,11 @@ async function refreshNews() {
       time: item.showTime || item.publishTime || item.createTime || "",
       url: item.url || item.uniqueUrl || ""
     }));
+    if (!externalData.news.length) {
+      externalData.news = [
+        { title: "实时财经新闻正在同步，交易城先按本地行情广播运行", source: "极乐广播台", time: new Date().toISOString(), url: "" }
+      ];
+    }
   } catch {
     externalData.news = externalData.news.length ? externalData.news : [
       { title: "新闻接口暂不可用，系统保留本地市场广播", source: "极乐广播台", time: new Date().toISOString(), url: "" }
