@@ -45,6 +45,17 @@ const modeNames = {
   rhythm: "节拍坠落"
 };
 
+const pathKey = "zhongyuanPathV1";
+const pathRealms = [
+  { id: "wenzhong", name: "闻钟", desc: "首次游戏解锁", reward: "基础钟声" },
+  { id: "jianhen", name: "见痕", desc: "累计消除100行", reward: "铭文印记从淡金变为亮金色" },
+  { id: "zhifan", name: "知返", desc: "单局触发5次回响", reward: "回响波纹半径扩大30%" },
+  { id: "tinglan", name: "听澜", desc: "单局总分达到5000分", reward: "新增台词：潮声已至" },
+  { id: "pojie", name: "破界", desc: "单次消除4行", reward: "摆锤指针增加残影拖尾" },
+  { id: "wangshi", name: "忘时", desc: "连续3局分数超过3000", reward: "终局文字变为：你已留下回响" },
+  { id: "jidao", name: "极道", desc: "累计消除1000行", reward: "金色钟摆粒子与标题后缀" }
+];
+
 let grid = emptyGrid();
 let current = makePiece();
 let next = makePiece();
@@ -83,6 +94,9 @@ let echoStacks = 0;
 let echoRipples = [];
 let echoFlashes = [];
 let echoFloats = [];
+let runEchoTriggers = 0;
+let tideWhisperShown = false;
+let pathState = loadPathState();
 const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"]);
 
 const finaleLines = [
@@ -129,6 +143,100 @@ function getSessionToken() {
 
 function emptyGrid() {
   return Array.from({ length: rows }, () => Array(cols).fill(null));
+}
+
+function loadPathState() {
+  const fallback = { unlocked: {}, totalLines: 0, recentScores: [] };
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(pathKey) || "{}") };
+  } catch {
+    return fallback;
+  }
+}
+
+function savePathState() {
+  localStorage.setItem(pathKey, JSON.stringify(pathState));
+}
+
+function hasRealm(id) {
+  return Boolean(pathState.unlocked?.[id]);
+}
+
+function unlockRealm(id) {
+  if (hasRealm(id)) return false;
+  const realm = pathRealms.find((item) => item.id === id);
+  if (!realm) return false;
+  pathState.unlocked[id] = new Date().toISOString();
+  savePathState();
+  applyPathEffects();
+  renderPathPanel();
+  if (id === "tinglan" && !tideWhisperShown) {
+    tideWhisperShown = true;
+    whisperQueue.push("潮声已至");
+    showNextWhisper();
+  }
+  showPathToast(`极道·${realm.name} 已悟`);
+  playBell("path");
+  return true;
+}
+
+function showPathToast(text) {
+  const el = document.querySelector("#pathToast");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("show");
+  void el.offsetWidth;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2000);
+}
+
+function checkPathUnlocks() {
+  if (pathState.totalLines >= 100) unlockRealm("jianhen");
+  if (pathState.totalLines >= 1000) unlockRealm("jidao");
+  if (runEchoTriggers >= 5) unlockRealm("zhifan");
+  if (runScore >= 5000) unlockRealm("tinglan");
+}
+
+function recordFinishedRun() {
+  pathState.recentScores = [...(pathState.recentScores || []), runScore].slice(-3);
+  savePathState();
+  if (pathState.recentScores.length === 3 && pathState.recentScores.every((score) => score > 3000)) {
+    unlockRealm("wangshi");
+  }
+}
+
+function renderPathPanel() {
+  const list = document.querySelector("#pathList");
+  if (!list) return;
+  list.innerHTML = pathRealms.map((realm, index) => {
+    const unlocked = hasRealm(realm.id);
+    return `
+      <article class="${unlocked ? "unlocked" : ""}">
+        <span>${index + 1}</span>
+        <div><b>${realm.name}</b><small>${realm.desc}</small><em>${realm.reward}</em></div>
+        <strong>${unlocked ? "已悟" : "未解"}</strong>
+      </article>
+    `;
+  }).join("");
+}
+
+function applyPathEffects() {
+  document.body.classList.toggle("realm-jianhen", hasRealm("jianhen"));
+  document.body.classList.toggle("realm-zhifan", hasRealm("zhifan"));
+  document.body.classList.toggle("realm-pojie", hasRealm("pojie"));
+  document.body.classList.toggle("realm-wangshi", hasRealm("wangshi"));
+  document.body.classList.toggle("realm-jidao", hasRealm("jidao"));
+  const title = document.querySelector(".topbar h1");
+  if (title) title.textContent = hasRealm("jidao") ? "方块战场 · 极道" : "方块战场";
+  mountJidaoParticles();
+}
+
+function mountJidaoParticles() {
+  const el = document.querySelector("#jidaoParticles");
+  if (!el || el.childElementCount || !hasRealm("jidao")) return;
+  el.innerHTML = Array.from({ length: 28 }, (_, index) => (
+    `<i style="--x:${(index * 37) % 100}%;--d:${2 + (index % 9) * .35}s;--s:${8 + (index % 5) * 3}px"></i>`
+  )).join("");
 }
 
 function makePrecisionMarker() {
@@ -292,23 +400,25 @@ function drawEngravings() {
   pruneCoveredEngravings(now);
   boardCtx.save();
   for (const mark of engravingMarks.values()) {
+    const realmBright = hasRealm("jianhen");
+    const level = realmBright ? Math.max(2, mark.level) : mark.level;
     const age = now - mark.bornAt;
     const fade = age <= 5000 ? 1 : Math.max(0, 1 - (age - 5000) / 1500);
-    const alpha = (mark.level > 1 ? 0.82 : 0.42) * fade;
+    const alpha = (level > 1 ? 0.82 : 0.42) * fade;
     const x = mark.x * cell;
     const y = mark.y * cell;
     boardCtx.globalAlpha = alpha;
-    boardCtx.fillStyle = mark.level > 1 ? "#ffd45f" : "#f2c14e";
-    boardCtx.font = mark.level > 1 ? "bold 17px serif" : "14px serif";
+    boardCtx.fillStyle = level > 1 ? "#ffd45f" : "#f2c14e";
+    boardCtx.font = level > 1 ? "bold 17px serif" : "14px serif";
     boardCtx.textAlign = "center";
     boardCtx.textBaseline = "middle";
     boardCtx.shadowColor = "rgba(242, 193, 78, .75)";
-    boardCtx.shadowBlur = mark.level > 1 ? 14 : 7;
+    boardCtx.shadowBlur = level > 1 ? 14 : 7;
     boardCtx.fillText(mark.rune, x + cell / 2, y + cell / 2);
-    boardCtx.strokeStyle = mark.level > 1 ? "#ffd45f" : "#f2c14e";
-    boardCtx.lineWidth = mark.level > 1 ? 1.6 : 1;
+    boardCtx.strokeStyle = level > 1 ? "#ffd45f" : "#f2c14e";
+    boardCtx.lineWidth = level > 1 ? 1.6 : 1;
     boardCtx.beginPath();
-    boardCtx.arc(x + cell / 2, y + cell / 2, mark.level > 1 ? 11 : 8, 0, Math.PI * 2);
+    boardCtx.arc(x + cell / 2, y + cell / 2, level > 1 ? 11 : 8, 0, Math.PI * 2);
     boardCtx.stroke();
   }
   boardCtx.restore();
@@ -322,7 +432,12 @@ function addRunScore(points) {
       whisperQueue.push(text);
     }
   }
+  if (hasRealm("tinglan") && runScore >= 1200 && !tideWhisperShown) {
+    tideWhisperShown = true;
+    whisperQueue.push("潮声已至");
+  }
   showNextWhisper();
+  checkPathUnlocks();
 }
 
 function showNextWhisper() {
@@ -367,6 +482,8 @@ function triggerEcho(fullRows) {
     return 0;
   }
   echoStacks += 1;
+  runEchoTriggers += 1;
+  checkPathUnlocks();
   const bonusRate = echoStacks * 0.2;
   echoFloats.push({
     text: `回响+${Math.round(bonusRate * 100)}%`,
@@ -392,11 +509,12 @@ function drawEchoEffects() {
   });
   echoRipples.forEach((ripple) => {
     const t = (now - ripple.bornAt) / 400;
+    const radiusScale = hasRealm("zhifan") ? 1.3 : 1;
     boardCtx.globalAlpha = Math.max(0, 1 - t) * 0.7;
     boardCtx.strokeStyle = "#f2c14e";
     boardCtx.lineWidth = 2;
     boardCtx.beginPath();
-    boardCtx.arc(ripple.x, ripple.y, 12 + t * 150, 0, Math.PI * 2);
+    boardCtx.arc(ripple.x, ripple.y, (12 + t * 150) * radiusScale, 0, Math.PI * 2);
     boardCtx.stroke();
   });
   echoFloats.forEach((float) => {
@@ -461,6 +579,7 @@ function clearLines(tag) {
     return 0;
   }
   let cleared = fullRows.length;
+  if (cleared >= 4) unlockRealm("pojie");
   markEngravings(fullRows);
   const echoBonusRate = triggerEcho(fullRows);
   const echoBonusScore = Math.round(cleared * 100 * echoBonusRate);
@@ -471,6 +590,8 @@ function clearLines(tag) {
     const tags = [tag];
     let bonusThisClear = echoBonusScore;
     runLines += cleared;
+    pathState.totalLines = Math.max(Number(pathState.totalLines || 0), Number(localPlayer.lines || 0)) + cleared;
+    savePathState();
     addRunScore(cleared * 100);
     if (echoBonusScore) addRunScore(echoBonusScore);
     advanceFinale(cleared);
@@ -507,6 +628,10 @@ function clearLines(tag) {
     }
     post("/api/line-clear", { playerId, lines: cleared, tags }).then((data) => {
       localPlayer = data.player;
+      pathState.totalLines = Math.max(Number(pathState.totalLines || 0), Number(localPlayer.lines || 0));
+      savePathState();
+      checkPathUnlocks();
+      renderPathPanel();
       localPlayer.score += bonusThisClear;
       toast(`消除 ${cleared} 行，钟渊 +${cleared}${echoBonusScore ? `，回响分 +${echoBonusScore}` : ""}，金币 +${data.reward.total}`);
       syncHud();
@@ -596,10 +721,14 @@ function endGame(reason) {
   if (gameOver) return;
   running = false;
   gameOver = true;
+  recordFinishedRun();
   playBell("gameover");
-  toast(`钟渊沉寂… ${reason}`);
+  const title = hasRealm("wangshi") ? "你已留下回响" : "钟渊沉寂…";
+  toast(`${title} ${reason}`);
   const overlay = document.querySelector("#endOverlay");
+  const titleEl = document.querySelector("#endTitle");
   const reasonEl = document.querySelector("#endReason");
+  if (titleEl) titleEl.textContent = title;
   if (reasonEl) reasonEl.textContent = reason;
   if (overlay) overlay.classList.remove("hidden");
 }
@@ -791,6 +920,8 @@ function resetGame(startNow = false, forceType = null) {
   precisionBonus = 0;
   runLines = 0;
   runScore = 0;
+  runEchoTriggers = 0;
+  tideWhisperShown = false;
   finaleProgress = 0;
   finaleAwake = false;
   engravingMarks = new Map();
@@ -819,6 +950,7 @@ async function startGame() {
     toast("请先在右上角进入身份中心登录或注册");
     return;
   }
+  unlockRealm("wenzhong");
   let forceType = null;
   if (!running && localPlayer.inventory && localPlayer.inventory.luckyBlocks > 0) {
     try {
@@ -970,6 +1102,9 @@ function playBell(kind, cleared = 1) {
   } else if (kind === "echo") {
     ring(ctx, 196, now, 0.95 + Math.min(3, cleared) * 0.16, 0.055);
     ring(ctx, 392, now + 0.04, 0.78, 0.032);
+  } else if (kind === "path") {
+    ring(ctx, 523.25, now, 0.8, 0.06);
+    ring(ctx, 1046.5, now + 0.08, 0.7, 0.035);
   }
 }
 
@@ -984,6 +1119,11 @@ async function getState() {
     if (!res.ok) throw new Error(`state ${res.status}`);
     const data = await res.json();
     localPlayer = data.player;
+    pathState.totalLines = Math.max(Number(pathState.totalLines || 0), Number(localPlayer.lines || 0));
+    savePathState();
+    checkPathUnlocks();
+    applyPathEffects();
+    renderPathPanel();
     syncHud();
     renderMarket(data);
     renderChat(data.messages);
@@ -1039,6 +1179,13 @@ document.querySelector("#pauseBtn").addEventListener("click", () => {
 });
 document.querySelector("#restartBtn").addEventListener("click", () => resetGame(true));
 document.querySelector("#cycleRestartBtn").addEventListener("click", () => resetGame(true));
+document.querySelector("#pathToggle").addEventListener("click", () => {
+  renderPathPanel();
+  document.querySelector("#pathPanel").classList.add("open");
+});
+document.querySelector("#pathClose").addEventListener("click", () => {
+  document.querySelector("#pathPanel").classList.remove("open");
+});
 document.querySelector("#modeSelect").addEventListener("change", (event) => {
   gameMode = event.target.value;
   if (!running) {
@@ -1112,5 +1259,7 @@ setInterval(() => {
 
 setInterval(getState, 2500);
 resetGame(false);
+applyPathEffects();
+renderPathPanel();
 getState();
 requestAnimationFrame(update);

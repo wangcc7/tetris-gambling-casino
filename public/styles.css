@@ -735,6 +735,151 @@ h2 {
   margin-bottom: 16px;
 }
 
+.realm-pojie::after {
+  filter: drop-shadow(0 0 10px rgba(242, 193, 78, .75)) drop-shadow(18px 0 6px rgba(242, 193, 78, .18));
+}
+
+.path-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 22;
+  width: 46px;
+  height: 46px;
+  min-height: 46px;
+  border-radius: 50%;
+  color: #211a05;
+  background: var(--gold);
+  border-color: #ffe8ae;
+  box-shadow: 0 0 24px rgba(242, 193, 78, .28);
+}
+
+.path-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 24;
+  width: min(390px, 92vw);
+  height: 100vh;
+  padding: 18px;
+  background: rgba(17, 19, 24, .96);
+  border-left: 1px solid rgba(242, 193, 78, .22);
+  transform: translateX(105%);
+  transition: transform .24s ease;
+  backdrop-filter: blur(12px);
+  overflow: auto;
+}
+
+.path-panel.open {
+  transform: translateX(0);
+}
+
+.path-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.path-list {
+  display: grid;
+  gap: 10px;
+}
+
+.path-list article {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #151922;
+}
+
+.path-list article.unlocked {
+  border-color: rgba(242, 193, 78, .55);
+  box-shadow: inset 0 0 20px rgba(242, 193, 78, .05);
+}
+
+.path-list span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--gold);
+  background: rgba(242, 193, 78, .08);
+}
+
+.path-list small,
+.path-list em {
+  display: block;
+  color: var(--muted);
+  font-style: normal;
+  margin-top: 3px;
+}
+
+.path-list strong {
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.path-toast {
+  position: fixed;
+  left: 50%;
+  top: 43%;
+  z-index: 40;
+  transform: translate(-50%, 12px);
+  color: #ffe8ae;
+  font-size: clamp(28px, 5vw, 58px);
+  font-weight: 900;
+  text-shadow: 0 0 26px rgba(242, 193, 78, .65);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.path-toast.show {
+  animation: path-toast 2s ease both;
+}
+
+@keyframes path-toast {
+  0% { opacity: 0; transform: translate(-50%, 20px) scale(.95); }
+  18% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  76% { opacity: 1; transform: translate(-50%, -8px) scale(1.02); }
+  100% { opacity: 0; transform: translate(-50%, -22px) scale(1.06); }
+}
+
+.jidao-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+  display: none;
+}
+
+.realm-jidao .jidao-particles {
+  display: block;
+}
+
+.jidao-particles i {
+  position: absolute;
+  left: var(--x);
+  top: -40px;
+  width: var(--s);
+  height: calc(var(--s) * 1.8);
+  border: 1px solid rgba(242, 193, 78, .72);
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(242, 193, 78, .32);
+  animation: pendulum-fall calc(7s + var(--d)) linear infinite;
+  animation-delay: calc(var(--d) * -1);
+}
+
+@keyframes pendulum-fall {
+  to { transform: translateY(110vh) rotate(360deg); }
+}
+
 .touch-controls {
   position: relative;
   z-index: 1;
