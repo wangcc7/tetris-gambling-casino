@@ -117,7 +117,7 @@ const externalData = {
   realStocks: [],
   news: [],
   insight: {
-    title: "丁元英式提醒",
+    title: "规则之眼",
     text: "别急着证明自己，先看清系统如何运转。",
     attribute: "识局"
   },

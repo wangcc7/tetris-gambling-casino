@@ -370,7 +370,7 @@ async function getState() {
     const system = document.querySelector("#systemDock");
     if (system) {
       const weather = data.external?.weather;
-      system.innerHTML = `<span>${new Date(data.serverTime).toLocaleString("zh-CN", { hour12: false })}</span><b>${data.version || "dev"}</b><small>${weather?.city || "济南"} ${weather?.temperature || "--"} ${weather?.text || ""}</small>`;
+      system.innerHTML = `<span class="clock">${new Date(data.serverTime).toLocaleString("zh-CN", { hour12: false })}</span><b>v${data.version || "dev"}</b><small>${weather?.city || "济南"} · ${weather?.temperature || "--"} · ${weather?.text || ""}</small>`;
     }
     const feed = document.querySelector("#battleFeed");
     if (feed) {

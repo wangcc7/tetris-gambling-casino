@@ -1,4 +1,9 @@
 const playerKey = "casinoPlayerId";
+let systemClockBase = null;
+let systemClockSyncedAt = 0;
+let lastSystemSnapshot = { version: "dev", weather: null };
+let systemClockTimer = null;
+let casinoAudio = null;
 
 export function createId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -68,6 +73,47 @@ export function pct(value) {
   return `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
+function formatSystemTime(value) {
+  return new Date(value).toLocaleString("zh-CN", {
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function currentSystemTime() {
+  if (!systemClockBase) return null;
+  return systemClockBase + Date.now() - systemClockSyncedAt;
+}
+
+function drawSystemDock() {
+  const system = document.querySelector("#systemDock");
+  if (!system) return;
+  const weather = lastSystemSnapshot.weather;
+  const time = currentSystemTime();
+  system.innerHTML = `
+    <span class="clock">${time ? escapeHtml(formatSystemTime(time)) : "同步时间中..."}</span>
+    <b>v${escapeHtml(lastSystemSnapshot.version || "dev")}</b>
+    <small>${escapeHtml(weather?.city || "济南")} · ${escapeHtml(weather?.temperature || "--")} · ${escapeHtml(weather?.text || "天气同步")}</small>
+  `;
+}
+
+export function updateSystemDock(state) {
+  if (state?.serverTime) {
+    systemClockBase = new Date(state.serverTime).getTime();
+    systemClockSyncedAt = Date.now();
+  }
+  lastSystemSnapshot = {
+    version: state?.version || lastSystemSnapshot.version || "dev",
+    weather: state?.external?.weather || lastSystemSnapshot.weather
+  };
+  drawSystemDock();
+}
+
 export function setActiveNav() {
   const file = location.pathname.split("/").pop() || "index.html";
   document.querySelectorAll("[data-nav]").forEach((link) => {
@@ -85,15 +131,7 @@ export function renderShellStatus(state) {
   if (online) online.textContent = state.onlinePlayers;
   const authButton = document.querySelector("#authToggle");
   if (authButton) authButton.textContent = state.identity?.username ? `账号 · ${state.identity.username}` : "登录 / 注册";
-  const system = document.querySelector("#systemDock");
-  if (system) {
-    const weather = state.external?.weather;
-    system.innerHTML = `
-      <span>${escapeHtml(new Date(state.serverTime).toLocaleString("zh-CN", { hour12: false }))}</span>
-      <b>${escapeHtml(state.version || "dev")}</b>
-      <small>${escapeHtml(weather?.city || "济南")} ${escapeHtml(weather?.temperature || "--")} ${escapeHtml(weather?.text || "")}</small>
-    `;
-  }
+  updateSystemDock(state);
 }
 
 export function renderChat(messages, target = "#chat") {
@@ -152,8 +190,11 @@ export function mountSystemDock() {
   const dock = document.createElement("div");
   dock.id = "systemDock";
   dock.className = "system-dock";
-  dock.innerHTML = "<span>同步时间中...</span>";
+  dock.innerHTML = '<span class="clock">同步时间中...</span><b>vdev</b><small>济南 · -- · 天气同步</small>';
   header.appendChild(dock);
+  if (!systemClockTimer) {
+    systemClockTimer = setInterval(drawSystemDock, 1000);
+  }
 }
 
 export function mountMusicDock() {
@@ -162,33 +203,123 @@ export function mountMusicDock() {
   const button = document.createElement("button");
   button.id = "musicToggle";
   button.className = "music-toggle";
-  button.textContent = "音乐";
-  let ctx = null;
-  let nodes = [];
-  button.addEventListener("click", () => {
-    if (ctx) {
-      nodes.forEach((node) => node.stop && node.stop());
-      nodes = [];
-      ctx.close();
-      ctx = null;
-      button.classList.remove("active");
-      return;
-    }
-    ctx = new AudioContext();
-    const gain = ctx.createGain();
-    gain.gain.value = 0.035;
-    gain.connect(ctx.destination);
-    [110, 164.81, 220].forEach((freq, index) => {
-      const osc = ctx.createOscillator();
-      osc.type = index === 0 ? "sine" : "triangle";
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      osc.start();
-      nodes.push(osc);
-    });
-    button.classList.add("active");
-  });
+  button.type = "button";
+  button.title = "开启交易城背景声场";
+  button.textContent = "声场";
+  button.addEventListener("click", () => toggleCasinoAudio(button));
   header.appendChild(button);
+}
+
+function createNoiseBuffer(ctx) {
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.6, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  }
+  return buffer;
+}
+
+function pulseParam(param, value, at, attack = 0.02, release = 0.28) {
+  param.cancelScheduledValues(at);
+  param.setValueAtTime(0.0001, at);
+  param.exponentialRampToValueAtTime(value, at + attack);
+  param.exponentialRampToValueAtTime(0.0001, at + release);
+}
+
+function playTone(ctx, destination, freq, duration, type, gainValue, detune = 0) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  osc.detune.value = detune;
+  osc.connect(gain);
+  gain.connect(destination);
+  pulseParam(gain.gain, gainValue, ctx.currentTime, 0.018, duration);
+  osc.start();
+  osc.stop(ctx.currentTime + duration + 0.05);
+}
+
+function toggleCasinoAudio(button) {
+  if (casinoAudio) {
+    const audio = casinoAudio;
+    casinoAudio.intervals.forEach((id) => clearInterval(id));
+    casinoAudio.pad.forEach((node) => node.stop());
+    casinoAudio.master.gain.exponentialRampToValueAtTime(0.0001, casinoAudio.ctx.currentTime + 0.6);
+    setTimeout(() => audio.ctx.close(), 700);
+    casinoAudio = null;
+    button.classList.remove("active");
+    button.textContent = "声场";
+    return;
+  }
+
+  const AudioClass = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AudioClass();
+  const master = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  const compressor = ctx.createDynamicsCompressor();
+  const delay = ctx.createDelay();
+  const delayGain = ctx.createGain();
+  const padGain = ctx.createGain();
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+
+  master.gain.value = 0.0001;
+  filter.type = "lowpass";
+  filter.frequency.value = 1450;
+  filter.Q.value = 0.85;
+  delay.delayTime.value = 0.27;
+  delayGain.gain.value = 0.16;
+  padGain.gain.value = 0.025;
+  lfo.frequency.value = 0.08;
+  lfoGain.gain.value = 260;
+
+  master.connect(filter);
+  filter.connect(compressor);
+  compressor.connect(ctx.destination);
+  filter.connect(delay);
+  delay.connect(delayGain);
+  delayGain.connect(filter);
+  lfo.connect(lfoGain);
+  lfoGain.connect(filter.frequency);
+  lfo.start();
+
+  const pad = [55, 82.41, 110, 146.83].map((freq, index) => {
+    const osc = ctx.createOscillator();
+    osc.type = index % 2 ? "triangle" : "sawtooth";
+    osc.frequency.value = freq;
+    osc.detune.value = index * 4 - 6;
+    osc.connect(padGain);
+    osc.start();
+    return osc;
+  });
+  padGain.connect(master);
+
+  const scale = [110, 130.81, 146.83, 164.81, 196, 220, 261.63, 293.66];
+  let step = 0;
+  const noise = createNoiseBuffer(ctx);
+  const scheduleBeat = () => {
+    const bass = [55, 55, 65.41, 49][step % 4];
+    playTone(ctx, master, bass, 0.42, "sine", 0.09);
+    playTone(ctx, master, scale[(step * 3) % scale.length], 0.24, "triangle", 0.025, step % 2 ? 7 : -7);
+    if (step % 4 === 2) {
+      const src = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      src.buffer = noise;
+      src.connect(gain);
+      gain.connect(master);
+      pulseParam(gain.gain, 0.018, ctx.currentTime, 0.006, 0.18);
+      src.start();
+      src.stop(ctx.currentTime + 0.2);
+    }
+    step++;
+  };
+  scheduleBeat();
+  const intervals = [setInterval(scheduleBeat, 520)];
+
+  master.gain.exponentialRampToValueAtTime(0.075, ctx.currentTime + 1.4);
+  casinoAudio = { ctx, master, pad: [...pad, lfo], intervals };
+  button.classList.add("active");
+  button.textContent = "声场 ON";
 }
 
 export function mountAuthDock() {

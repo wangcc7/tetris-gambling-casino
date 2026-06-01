@@ -9,7 +9,7 @@ async function render() {
   renderFutures(state.futures, "#futures");
   renderChat(state.messages.slice(0, 8), "#chat");
   document.querySelector("#insightCard").innerHTML = `
-    <b>${escapeHtml(state.external?.insight?.title || "丁元英式提醒")}</b>
+    <b>${escapeHtml(state.external?.insight?.title || "规则之眼")}</b>
     <p>${escapeHtml(state.external?.insight?.text || "先看清系统，再决定出手。")}</p>
     <small>属性：${escapeHtml(state.external?.insight?.attribute || "识局")}</small>
   `;
