@@ -4,7 +4,28 @@
   <body>
     <header class="game-header"><a class="brand" href="/index.html">极乐交易城</a><nav class="main-nav"><a data-nav href="/index.html">大厅</a><a data-nav href="/game.html">方块战场</a><a data-nav href="/market.html">交易市场</a><a data-nav href="/guilds.html">公会</a><a data-nav href="/activities.html">活动</a><a data-nav href="/rankings.html">排行</a><a data-nav href="/chat.html">聊天</a><a data-nav href="/profile.html">资产</a></nav><div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div></header>
     <main class="page-shell two-col">
-      <section class="panel"><h1>玩家资产</h1><div class="inline-form"><input id="profileName" maxlength="16"><button id="saveProfile">保存昵称</button><button id="dailySign">每日签到</button></div><div id="assetStats" class="stat-grid wide"></div><p id="eventTicker" data-toast class="muted">资产同步中...</p></section>
+      <section class="panel wide">
+        <h1>身份中心</h1>
+        <div id="identityCard" class="identity-card"></div>
+        <div class="identity-forms">
+          <div>
+            <h2>绑定为正式居民</h2>
+            <input id="registerUser" placeholder="账号">
+            <input id="registerPass" type="password" placeholder="密码，至少 4 位">
+            <input id="registerName" placeholder="角色名">
+            <button id="registerAccount">注册并绑定当前进度</button>
+          </div>
+          <div>
+            <h2>登录已有居民档案</h2>
+            <input id="loginUser" placeholder="账号">
+            <input id="loginPass" type="password" placeholder="密码">
+            <button id="loginAccount">登录并切换角色</button>
+            <button id="logoutAccount">退出当前身份</button>
+          </div>
+        </div>
+        <p id="eventTicker" data-toast class="muted">身份档案同步中...</p>
+      </section>
+      <section class="panel"><h1>玩家资产</h1><div class="inline-form"><input id="profileName" maxlength="16"><button id="saveProfile">保存昵称</button><button id="dailySign">每日签到</button></div><div id="assetStats" class="stat-grid wide"></div></section>
       <section class="panel"><h2>称号</h2><div id="titles" class="legend"></div></section>
       <section class="panel"><h2>库存</h2><div id="inventory" class="asset-list"></div></section>
       <section class="panel"><h2>持仓</h2><div id="positions"></div></section>

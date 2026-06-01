@@ -212,6 +212,11 @@ function ensurePlayer(id) {
     state.players[id] = {
       id,
       name: `玩家${id.slice(0, 4)}`,
+      identityNo: `GC-${id.slice(0, 8).toUpperCase()}`,
+      status: "active",
+      role: "player",
+      createdAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
       coins: state.economy.initialCoins,
       score: 0,
       lines: 0,
@@ -234,6 +239,11 @@ function ensurePlayer(id) {
 }
 
 function normalizePlayer(player) {
+  player.identityNo ||= `GC-${String(player.id || crypto.randomUUID()).slice(0, 8).toUpperCase()}`;
+  player.status ||= player.banned ? "banned" : "active";
+  player.role ||= "player";
+  player.createdAt ||= new Date().toISOString();
+  player.lastSeenAt ||= player.updatedAt ? new Date(player.updatedAt).toISOString() : new Date().toISOString();
   player.positions ||= [];
   player.titles ||= ["新晋韭菜"];
   player.inventory ||= { luckyBlocks: 0, skins: [] };
@@ -246,7 +256,18 @@ function normalizePlayer(player) {
   player.claimedMissions ||= {};
   player.shields ||= 0;
   player.harvested ||= 0;
+  player.banned = player.status === "banned" || Boolean(player.banned);
   return player;
+}
+
+function normalizeAccount(account, username) {
+  account.id ||= `acct-${crypto.randomUUID().slice(0, 8)}`;
+  account.username ||= username;
+  account.status ||= "active";
+  account.role ||= "resident";
+  account.createdAt ||= new Date().toISOString();
+  account.lastLoginAt ||= null;
+  return account;
 }
 
 function todayKey() {
@@ -263,6 +284,7 @@ function loadPersistedState() {
     if (Array.isArray(saved.stocks)) state.stocks = saved.stocks;
     if (Array.isArray(saved.futures)) state.futures = saved.futures;
     for (const player of Object.values(state.players)) normalizePlayer(player);
+    for (const [username, account] of Object.entries(state.accounts)) normalizeAccount(account, username);
     state.flags.nextEventAt = Date.now() + 30000;
     console.log(`Loaded persisted state from ${stateFile}`);
   } catch (error) {
@@ -340,28 +362,58 @@ function useItem(player, itemId) {
   return { ok: false, error: "道具不可用" };
 }
 
-function registerAccount(username, password, displayName) {
+function publicAccount(account) {
+  if (!account) return null;
+  return {
+    id: account.id,
+    username: account.username,
+    status: account.status,
+    role: account.role,
+    createdAt: account.createdAt,
+    lastLoginAt: account.lastLoginAt
+  };
+}
+
+function identityFor(player) {
+  const account = player.account ? state.accounts[player.account] : null;
+  return {
+    mode: account ? "resident" : "guest",
+    label: account ? "正式居民" : "游客通行证",
+    identityNo: player.identityNo,
+    username: account?.username || null,
+    account: publicAccount(account),
+    status: player.status,
+    canBind: !account
+  };
+}
+
+function registerAccount(username, password, displayName, boundPlayerId) {
   const normalized = String(username || "").trim().toLowerCase();
   if (!/^[a-z0-9_\u4e00-\u9fa5]{2,16}$/i.test(normalized)) return { ok: false, error: "账号需 2-16 位中文、字母、数字或下划线" };
   if (String(password || "").length < 4) return { ok: false, error: "密码至少 4 位" };
   if (state.accounts[normalized]) return { ok: false, error: "账号已存在" };
-  const playerId = crypto.randomUUID();
-  const player = ensurePlayer(playerId);
+  const player = ensurePlayer(boundPlayerId || crypto.randomUUID());
+  if (player.account && player.account !== normalized) return { ok: false, error: "当前角色已绑定账号" };
   player.name = String(displayName || username).slice(0, 16);
   player.account = normalized;
+  player.status = "active";
+  player.banned = false;
   player.titles = ["交易城居民", "新晋韭菜"];
-  state.accounts[normalized] = { username: normalized, passwordHash: hashPassword(password), playerId };
-  pushMessage("户籍柜台", `${player.name} 完成注册，获得交易城居民身份`, "system");
-  return { ok: true, player, account: { username: normalized } };
+  state.accounts[normalized] = normalizeAccount({ username: normalized, passwordHash: hashPassword(password), playerId: player.id }, normalized);
+  pushMessage("户籍柜台", `${player.name} 完成户籍绑定，游客进度已转为正式居民档案`, "system");
+  return { ok: true, player, identity: identityFor(player), account: publicAccount(state.accounts[normalized]) };
 }
 
 function loginAccount(username, password) {
   const normalized = String(username || "").trim().toLowerCase();
-  const account = state.accounts[normalized];
+  const account = normalizeAccount(state.accounts[normalized] || {}, normalized);
   if (!account || account.passwordHash !== hashPassword(password)) return { ok: false, error: "账号或密码错误" };
+  if (account.status === "banned") return { ok: false, error: "账号已被封禁" };
   const player = ensurePlayer(account.playerId);
+  if (player.status === "banned") return { ok: false, error: "角色已被封禁" };
+  account.lastLoginAt = new Date().toISOString();
   pushMessage("户籍柜台", `${player.name} 回到交易城`, "system");
-  return { ok: true, player, account: { username: normalized } };
+  return { ok: true, player, identity: identityFor(player), account: publicAccount(account) };
 }
 
 function snapshot(playerId) {
@@ -376,12 +428,16 @@ function snapshot(playerId) {
     positions: [],
     titles: []
   };
-  if (playerId) player.updatedAt = Date.now();
+  if (playerId) {
+    player.updatedAt = Date.now();
+    player.lastSeenAt = new Date().toISOString();
+  }
   state.onlinePlayers = Object.values(state.players).filter((p) => Date.now() - p.updatedAt < 45000).length;
   return {
     serverTime: new Date().toISOString(),
     world,
     player,
+    identity: playerId ? identityFor(player) : null,
     stocks: state.stocks,
     futures: state.futures,
     bankerPool: Math.round(state.bankerPool),
@@ -514,6 +570,42 @@ function adminAction(action, payload) {
     const player = ensurePlayer(payload.playerId);
     player.coins += Number(payload.amount || 0);
   }
+  if (action === "playerStatus") {
+    const player = ensurePlayer(payload.playerId);
+    player.status = payload.status === "banned" ? "banned" : "active";
+    player.banned = player.status === "banned";
+    if (player.account && state.accounts[player.account]) state.accounts[player.account].status = player.status;
+    pushMessage("户籍柜台", `${player.name} 状态变更为 ${player.status}`, "admin", "后台");
+  }
+  if (action === "resetPlayer") {
+    const player = ensurePlayer(payload.playerId);
+    const keep = {
+      id: player.id,
+      name: player.name,
+      identityNo: player.identityNo,
+      account: player.account,
+      status: player.status,
+      role: player.role,
+      createdAt: player.createdAt
+    };
+    state.players[player.id] = normalizePlayer({
+      ...keep,
+      coins: state.economy.initialCoins,
+      score: 0,
+      lines: 0,
+      shields: 0,
+      harvested: 0,
+      positions: [],
+      titles: player.account ? ["交易城居民", "新晋韭菜"] : ["新晋韭菜"],
+      inventory: { luckyBlocks: 0, skins: [] },
+      stats: { chat: 0, trades: 0, guildActions: 0, signin: 0 },
+      claimedMissions: {},
+      guildId: null,
+      lastSignin: null,
+      updatedAt: Date.now()
+    });
+    pushMessage("户籍柜台", `${player.name} 的角色档案已被重置`, "admin", "后台");
+  }
   if (action === "leekDay") {
     for (const player of Object.values(state.players)) {
       player.coins = Math.floor(player.coins / 2);
@@ -559,7 +651,7 @@ async function api(req, res) {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname === "/api/auth/register" && req.method === "POST") {
     const body = await readBody(req);
-    const result = registerAccount(body.username, body.password, body.displayName);
+    const result = registerAccount(body.username, body.password, body.displayName, body.playerId);
     return sendJson(res, result, result.ok ? 200 : 400);
   }
   if (url.pathname === "/api/auth/login" && req.method === "POST") {
@@ -568,6 +660,7 @@ async function api(req, res) {
     return sendJson(res, result, result.ok ? 200 : 401);
   }
   if (url.pathname === "/api/state") return sendJson(res, snapshot(url.searchParams.get("playerId")));
+  if (url.pathname === "/api/auth/status") return sendJson(res, snapshot(url.searchParams.get("playerId")));
   if (url.pathname === "/api/line-clear" && req.method === "POST") {
     const body = await readBody(req);
     const player = ensurePlayer(body.playerId);
@@ -685,7 +778,11 @@ async function admin(req, res) {
   }
   if (url.pathname === "/admin/api/state") {
     if (!isAdmin(req)) return sendJson(res, { ok: false }, 401);
-    return sendJson(res, { ...snapshot(url.searchParams.get("playerId")), players: Object.values(state.players) });
+    return sendJson(res, {
+      ...snapshot(url.searchParams.get("playerId")),
+      players: Object.values(state.players).map((player) => ({ ...normalizePlayer(player), identity: identityFor(player) })),
+      accounts: Object.fromEntries(Object.entries(state.accounts).map(([username, account]) => [username, publicAccount(normalizeAccount(account, username))]))
+    });
   }
   if (url.pathname === "/admin/api/action" && req.method === "POST") {
     if (!isAdmin(req)) return sendJson(res, { ok: false }, 401);

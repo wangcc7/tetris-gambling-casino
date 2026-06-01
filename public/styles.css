@@ -282,6 +282,33 @@ body {
   border-color: var(--line);
 }
 
+.registry-table {
+  display: grid;
+  gap: 8px;
+}
+
+.registry-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: #151922;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.registry-row small,
+.registry-row span {
+  display: block;
+  color: var(--muted);
+}
+
+.registry-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .event-list span {
   display: block;
   color: var(--muted);
@@ -571,6 +598,48 @@ h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.identity-card {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.identity-card div,
+.identity-forms > div {
+  background: #151922;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.identity-card span,
+.identity-card small {
+  display: block;
+  color: var(--muted);
+}
+
+.identity-card strong {
+  display: block;
+  margin: 6px 0;
+  font-size: 20px;
+}
+
+.identity-forms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.identity-forms > div {
+  display: grid;
+  gap: 8px;
+}
+
+.wide {
+  grid-column: 1 / -1;
 }
 
 .channel-tabs {

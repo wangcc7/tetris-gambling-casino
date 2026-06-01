@@ -79,8 +79,8 @@ export function renderShellStatus(state) {
   if (coin) coin.textContent = money(state.player.coins);
   if (name) name.textContent = state.player.name;
   if (online) online.textContent = state.onlinePlayers;
-  const authName = document.querySelector("[data-auth-name]");
-  if (authName) authName.textContent = getSession().accountName || "游客身份";
+  const authButton = document.querySelector("#authToggle");
+  if (authButton) authButton.textContent = state.identity?.mode === "resident" ? `正式居民 · ${state.identity.username}` : "游客通行证";
 }
 
 export function renderChat(messages, target = "#chat") {
@@ -139,43 +139,14 @@ export function mountAuthDock() {
   dock.id = "authDock";
   dock.className = "auth-dock";
   dock.innerHTML = `
-    <button id="authToggle">${session.accountName ? escapeHtml(session.accountName) : "登录 / 注册"}</button>
-    <div id="authPanel" class="auth-panel hidden">
-      <b>户籍柜台</b>
-      <input id="authUser" placeholder="账号">
-      <input id="authPass" type="password" placeholder="密码">
-      <input id="authName" placeholder="角色名">
-      <div class="auth-actions">
-        <button id="loginBtn">登录</button>
-        <button id="registerBtn">注册</button>
-      </div>
-      <small>注册后会绑定你的方块矿工身份。</small>
-    </div>
+    <button id="authToggle">${session.accountName ? `正式居民 · ${escapeHtml(session.accountName)}` : "游客通行证"}</button>
   `;
   header.appendChild(dock);
   document.querySelector("#authToggle").addEventListener("click", () => {
-    if (getSession().accountName) {
-      if (confirm("退出当前账号？")) {
-        localStorage.removeItem("casinoSession");
-        location.reload();
-      }
-      return;
-    }
-    document.querySelector("#authPanel").classList.toggle("hidden");
+    location.href = "/profile.html";
   });
-  document.querySelector("#loginBtn").addEventListener("click", () => authAction("login"));
-  document.querySelector("#registerBtn").addEventListener("click", () => authAction("register"));
 }
 
-async function authAction(mode) {
-  const username = document.querySelector("#authUser").value.trim();
-  const password = document.querySelector("#authPass").value;
-  const displayName = document.querySelector("#authName").value.trim();
-  try {
-    const data = await post(`/api/auth/${mode}`, { username, password, displayName });
-    setSession({ playerId: data.player.id, accountName: data.account.username });
-    location.reload();
-  } catch {
-    alert(mode === "login" ? "登录失败，请检查账号密码" : "注册失败，请换一个账号或检查密码");
-  }
+export function clearSession() {
+  localStorage.removeItem("casinoSession");
 }

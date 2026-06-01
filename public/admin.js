@@ -46,8 +46,34 @@ async function refresh() {
     ["股票数量", adminState.stocks.length],
     ["期货数量", adminState.futures.length],
     ["聊天消息", adminState.messages.length],
-    ["运行时间", `${Math.floor((Date.now() - new Date(adminState.serverTime).getTime()) / 1000)}s`]
+    ["正式账号", Object.keys(adminState.accounts || {}).length]
   ].map(([k, v]) => `<div><small>${k}</small><br><b>${v}</b></div>`).join("");
+  $("#playerRegistry").innerHTML = adminState.players.map((p) => `
+    <article class="registry-row">
+      <div><b>${p.name}</b><small>${p.identity.identityNo} · ${p.identity.label}</small></div>
+      <div><span>${p.identity.username || "游客"}</span><small>${p.status}</small></div>
+      <div><span>${Math.round(p.coins)} 金币</span><small>${p.lines} 行 · ${p.score} 分</small></div>
+      <div class="registry-actions">
+        <button data-ban="${p.id}">${p.status === "banned" ? "解封" : "封禁"}</button>
+        <button data-reset="${p.id}">重置</button>
+      </div>
+    </article>
+  `).join("");
+  bindRegistryActions();
+}
+
+function bindRegistryActions() {
+  document.querySelectorAll("[data-ban]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const player = adminState.players.find((item) => item.id === button.dataset.ban);
+      action("playerStatus", { playerId: button.dataset.ban, status: player.status === "banned" ? "active" : "banned" });
+    });
+  });
+  document.querySelectorAll("[data-reset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (confirm("确认重置该玩家资产和战绩？账号绑定会保留。")) action("resetPlayer", { playerId: button.dataset.reset });
+    });
+  });
 }
 
 $("#loginBtn").addEventListener("click", login);
