@@ -69,7 +69,17 @@ let precisionMarker = makePrecisionMarker();
 let precisionBonus = 0;
 let lastLockCleared = 0;
 let fxContext = null;
+let runLines = 0;
+let finaleProgress = 0;
+let finaleAwake = false;
 const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"]);
+
+const finaleLines = [
+  "你听见的不是钟声，是选择回到因果里的声音。",
+  "局不是用来赢的，局是用来看清自己的。",
+  "当终焉走满，真正沉下去的是侥幸。",
+  "别跟时间讨价还价，先把结构摆正。"
+];
 
 function createId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -195,6 +205,36 @@ function renderHistory() {
     : '<option value="0">暂无可回溯状态</option>';
 }
 
+function advanceFinale() {
+  const nextProgress = Math.min(100, Math.floor(runLines / 4) * 25);
+  if (nextProgress <= finaleProgress) return;
+  finaleProgress = nextProgress;
+  const line = finaleLines[Math.min(finaleLines.length - 1, Math.floor(finaleProgress / 25) - 1)];
+  const finaleLine = document.querySelector("#finaleLine");
+  if (finaleLine) finaleLine.textContent = line;
+  if (finaleProgress >= 100 && !finaleAwake) {
+    finaleAwake = true;
+    document.body.classList.add("finale-awake");
+    speakFinaleLine(line);
+    toast(`终焉刻度满溢：${line}`);
+    setTimeout(() => document.body.classList.remove("finale-awake"), 4200);
+  }
+}
+
+function speakFinaleLine(line) {
+  if (!("speechSynthesis" in window)) return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(line);
+    utterance.lang = "zh-CN";
+    utterance.rate = 0.86;
+    utterance.pitch = 0.72;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Speech synthesis is optional; the visible line remains the source of truth.
+  }
+}
+
 function rotate(matrix) {
   return matrix[0].map((_, index) => matrix.map((row) => row[index]).reverse());
 }
@@ -249,6 +289,8 @@ function clearLines(tag) {
   if (cleared > 0) {
     const tags = [tag];
     let bonusThisClear = 0;
+    runLines += cleared;
+    advanceFinale(cleared);
     if (tag === "greed" && goldFloat) {
       localPlayer.coins += goldFloat.value;
       toast(`贪财拾取 +${goldFloat.value} 金币`);
@@ -309,10 +351,7 @@ function nextPiece() {
       grid[2] = Array(cols).fill(null);
       toast("进入濒死状态：3 次落块内一次消 3 行以上才能续命");
     } else {
-      running = false;
-      gameOver = true;
-      playBell("gameover");
-      toast("爆仓式失败，点击重开");
+      endGame("顶部刻度被压满，时间拒绝继续流动。");
     }
   }
   drawNext();
@@ -350,10 +389,7 @@ function drop() {
   if (dying && cleared < 3) {
     dyingLocks -= 1;
     if (dyingLocks <= 0) {
-      running = false;
-      gameOver = true;
-      playBell("gameover");
-      toast("濒死倒计时耗尽：低沉钟鸣响起");
+      endGame("濒死倒计时耗尽，低沉钟鸣响起。");
       syncHud();
       return;
     }
@@ -370,6 +406,18 @@ function swingPendulum(now) {
     current.swingDir *= -1;
     if (!collide(current, current.swingDir, 0)) current.x += current.swingDir;
   }
+}
+
+function endGame(reason) {
+  if (gameOver) return;
+  running = false;
+  gameOver = true;
+  playBell("gameover");
+  toast(`钟渊沉寂… ${reason}`);
+  const overlay = document.querySelector("#endOverlay");
+  const reasonEl = document.querySelector("#endReason");
+  if (reasonEl) reasonEl.textContent = reason;
+  if (overlay) overlay.classList.remove("hidden");
 }
 
 function hardDrop() {
@@ -502,10 +550,7 @@ function updateModeClock(time) {
   survivalStep = Math.floor(elapsed / 18);
   rhythmBeat = gameMode === "rhythm" && Math.floor(time / 520) % 2 === 0;
   if (gameMode === "timed" && modeRemaining <= 0) {
-    running = false;
-    gameOver = true;
-    playBell("gameover");
-    toast(`60秒限时结束：最终分数 ${Math.floor(localPlayer.score)}`);
+    endGame(`60秒限时结束，最终分数 ${Math.floor(localPlayer.score)}。`);
   }
   syncClockHud();
 }
@@ -543,6 +588,9 @@ function rotateCurrent() {
 function resetGame(startNow = false, forceType = null) {
   const modeSelect = document.querySelector("#modeSelect");
   if (modeSelect) gameMode = modeSelect.value;
+  document.querySelector("#endOverlay")?.classList.add("hidden");
+  document.body.classList.remove("finale-awake");
+  window.speechSynthesis?.cancel();
   grid = emptyGrid();
   current = makePiece(forceType);
   next = makePiece();
@@ -555,6 +603,9 @@ function resetGame(startNow = false, forceType = null) {
   dyingLocks = 0;
   precisionMarker = makePrecisionMarker();
   precisionBonus = 0;
+  runLines = 0;
+  finaleProgress = 0;
+  finaleAwake = false;
   survivalStep = 0;
   modeRemaining = 60;
   modeStartedAt = startNow ? Date.now() : 0;
@@ -614,6 +665,7 @@ function syncHud() {
   if (specialText) specialText.textContent = current.specialName ? `${current.specialName} · ${current.type}` : `${current.type} · ${attrs[current.type].label}`;
   if (rewindBtn) rewindBtn.disabled = zhongyuan < 10 || !history.length;
   syncClockHud();
+  syncTimeOverlay();
 }
 
 function syncClockHud() {
@@ -630,6 +682,18 @@ function syncClockHud() {
       : `阶梯 ${survivalStep}`;
   }
   if (rhythmLight) rhythmLight.classList.toggle("active", rhythmBeat);
+  syncTimeOverlay();
+}
+
+function syncTimeOverlay() {
+  const overlayLines = document.querySelector("#timeOverlayLines");
+  const overlayRemaining = document.querySelector("#timeOverlayRemaining");
+  const finaleValue = document.querySelector("#finaleValue");
+  const finaleBar = document.querySelector("#finaleBar");
+  if (overlayLines) overlayLines.textContent = runLines;
+  if (overlayRemaining) overlayRemaining.textContent = gameMode === "timed" ? `${Math.ceil(modeRemaining)}s` : "--";
+  if (finaleValue) finaleValue.textContent = `${finaleProgress}%`;
+  if (finaleBar) finaleBar.style.width = `${finaleProgress}%`;
 }
 
 function renderMarket(data) {
@@ -770,6 +834,7 @@ document.querySelector("#pauseBtn").addEventListener("click", () => {
   syncHud();
 });
 document.querySelector("#restartBtn").addEventListener("click", () => resetGame(true));
+document.querySelector("#cycleRestartBtn").addEventListener("click", () => resetGame(true));
 document.querySelector("#modeSelect").addEventListener("change", (event) => {
   gameMode = event.target.value;
   if (!running) {

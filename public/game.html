@@ -23,6 +23,15 @@
         <div class="play-layout">
           <div class="board-wrap">
             <canvas id="board" width="300" height="600"></canvas>
+            <div id="timeOverlay" class="time-overlay">
+              <span>本局消行 <b id="timeOverlayLines">0</b></span>
+              <span>剩余 <b id="timeOverlayRemaining">--</b></span>
+            </div>
+            <div class="finale-meter">
+              <div><span>终焉进度</span><b id="finaleValue">0%</b></div>
+              <div class="bar"><i id="finaleBar"></i></div>
+              <small id="finaleLine">四行一响，百刻终焉。</small>
+            </div>
             <div class="touch-controls"><button data-action="left">←</button><button data-action="rotate">↻</button><button data-action="right">→</button><button data-action="drop">⤓</button></div>
           </div>
           <aside class="side-panel">
@@ -63,6 +72,14 @@
         <div id="battleFeed" class="event-list"></div>
       </aside>
     </main>
+    <div id="endOverlay" class="end-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+      <div>
+        <span>终局</span>
+        <h2 id="endTitle">钟渊沉寂…</h2>
+        <p id="endReason">时间已经合上了账本。</p>
+        <button id="cycleRestartBtn">重启轮回</button>
+      </div>
+    </div>
     <script type="module" src="/js/auth.js"></script>
     <script src="/app.js"></script>
   </body>

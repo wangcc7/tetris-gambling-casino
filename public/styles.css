@@ -580,6 +580,70 @@ h2 {
   animation: clock-hand 32s linear infinite;
 }
 
+.time-overlay {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  color: var(--muted);
+  background: rgba(9, 11, 16, .78);
+  border: 1px solid rgba(242, 193, 78, .26);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.time-overlay b {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.finale-meter {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 66px;
+  width: min(86%, 300px);
+  transform: translateX(-50%);
+  padding: 9px 10px;
+  background: rgba(9, 11, 16, .82);
+  border: 1px solid rgba(255, 92, 108, .26);
+  border-radius: 7px;
+  backdrop-filter: blur(8px);
+}
+
+.finale-meter div:first-child {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finale-meter b {
+  color: var(--red);
+}
+
+.finale-meter small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.finale-meter .bar i {
+  background: linear-gradient(90deg, var(--gold), var(--red));
+}
+
+.finale-awake {
+  background: radial-gradient(circle at 50% 20%, rgba(255, 92, 108, .22), transparent 34%), var(--bg);
+}
+
 #board {
   position: relative;
   z-index: 1;
@@ -592,6 +656,49 @@ h2 {
     radial-gradient(circle at 50% 12%, rgba(242, 193, 78, .08), transparent 34%),
     #090b10;
   box-shadow: inset 0 0 42px rgba(53, 215, 232, .08), 0 0 34px rgba(0, 0, 0, .35);
+}
+
+.end-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(5, 7, 10, .72);
+  backdrop-filter: blur(10px);
+}
+
+.end-overlay > div {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid rgba(242, 193, 78, .34);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at top, rgba(242, 193, 78, .16), transparent 46%),
+    #151922;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .48);
+  text-align: center;
+}
+
+.end-overlay span {
+  color: var(--gold);
+  font-size: 12px;
+}
+
+.end-overlay h2 {
+  display: block;
+  margin: 8px 0;
+  font-size: 28px;
+}
+
+.end-overlay h2::before {
+  display: none;
+}
+
+.end-overlay p {
+  color: var(--muted);
+  margin-bottom: 16px;
 }
 
 .touch-controls {
