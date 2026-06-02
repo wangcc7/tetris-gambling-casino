@@ -1,8 +1,8 @@
 {
   "name": "tetris-gambling-casino",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
-  "description": "终焉钟城 · 钟渊试炼 prototype",
+  "description": "终焉钟城 V2 · 十日轮回 SPA prototype",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js"

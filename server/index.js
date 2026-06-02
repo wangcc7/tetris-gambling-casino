@@ -12,7 +12,7 @@ const playerPort = Number(process.env.PLAYER_PORT || 8080);
 const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
 const adminPassword = process.env.ADMIN_PASSWORD || "gambleMaster666";
-const appVersion = process.env.APP_VERSION || "0.6.1-zhongyan";
+const appVersion = process.env.APP_VERSION || "0.7.0-v2";
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",
   port: Number(process.env.DB_PORT || 3306),
@@ -28,9 +28,9 @@ let mysqlStatus = "connecting";
 const world = {
   name: "终焉钟城",
   tagline: "十日轮回，钟声为证",
-  premise: "玩家被钟渊系统拉入一座不断重置的终焉钟城。方块不是矿石，而是试炼碎片；行情、新闻、公会和聊天都是人性的压力场。活下去不是目的，看清规则才是。",
-  factions: ["试炼者", "钟渊系统", "生肖裁判", "回响者"],
-  loop: ["方块试炼积累筹码", "市场雾区制造选择", "公会结盟交换情报", "排行榜记录回响", "聊天室暴露人心"]
+  premise: "玩家被钟渊系统拉入一座无限轮回的时钟城市。每十日，城市重置。试炼者在方块试炼中刻下钟痕，在雾区交易所试探规则，在列车汽笛声中寻找出口。",
+  factions: ["试炼者", "钟渊系统", "十二生肖裁判", "四象神兽", "终焉列车", "回响者"],
+  loop: ["晨钟列车发布裁决", "方块试炼刻下钟痕", "雾区商品制造选择", "试炼契约临时结盟", "规则之眼贩卖情报", "终焉列车结算回响"]
 };
 
 const stocks = [
@@ -71,6 +71,65 @@ const npcs = [
   { name: "甜甜", personality: "柔软幸存者", strategy: "用善意维持队伍温度", line: "如果钟声又响了，至少别让同伴一个人听。" },
   { name: "地虎", personality: "粗暴裁判", strategy: "逼玩家正面下注", line: "别磨蹭，钟城从不奖励犹豫的人。" },
   { name: "青龙", personality: "高位审判者", strategy: "以规则压迫全局", line: "回响越响，代价越重。你们最好记住。" }
+];
+
+const v2Npcs = [
+  ...npcs,
+  { name: "列车长", personality: "沉默神秘", strategy: "只在列车进站时透露方向", line: "下一站，不是你们的终点。" },
+  { name: "钟楼守", personality: "疯狂时间信徒", strategy: "守着第十层的禁忌", line: "第十层？没有人上过第十层。" },
+  { name: "白虎", personality: "锋利直白", strategy: "逼迫试炼者正面对抗", line: "胜者问规则。败者被规则问。" },
+  { name: "朱雀", personality: "温柔燃烧", strategy: "让旧规则在火里重写", line: "烧掉的规则，不会再长出来。" },
+  { name: "玄武", personality: "沉稳无边", strategy: "考验生存与耐心", line: "别怕。城墙比你想象的要厚。" },
+  { name: "青龙幻影", personality: "威严终局", strategy: "宣布十日裁决", line: "你们的十日，到此为止。" }
+];
+
+const zodiacDays = [
+  { day: 1, zodiac: "鼠", code: "觉", title: "初醒之日", declaration: "小东西，别急着跑。先看看规则。", effect: "首次消行 x2，方块速度偏慢" },
+  { day: 2, zodiac: "牛", code: "固", title: "扎根之日", declaration: "稳一点。急出来的路走不远。", effect: "连续消行奖励递增，消行分数 x1.2" },
+  { day: 3, zodiac: "虎", code: "争", title: "白虎试炼", declaration: "别躲。站出来，让我看看你的牙。", effect: "PVP 攻击行与对抗奖励增强" },
+  { day: 4, zodiac: "兔", code: "速", title: "疾风之日", declaration: "快，不一定对。但慢，一定死。", effect: "下落速度 x1.5，硬降奖励提高" },
+  { day: 5, zodiac: "龙", code: "变", title: "朱雀涅槃", declaration: "稀有？那要看你能不能接住。", effect: "稀有方块概率翻倍，涅槃方块出现" },
+  { day: 6, zodiac: "蛇", code: "雾", title: "迷局之日", declaration: "雾里看花。不是看不清，是不想看。", effect: "雾区波动 x2，情报价格翻倍" },
+  { day: 7, zodiac: "马", code: "守", title: "玄武守城", declaration: "别停。停下来的那一刻，规则就赢了。", effect: "无尽生存奖励增强" },
+  { day: 8, zodiac: "羊", code: "契", title: "结盟之日", declaration: "一个人走不快。三个人可以。", effect: "契约奖励 x2，普通契约创建免费" },
+  { day: 9, zodiac: "猴", code: "机", title: "洞察之日", declaration: "知道规则的人，才有资格打破规则。", effect: "情报半价，准确率提升" },
+  { day: 10, zodiac: "鸡", code: "鸣", title: "青龙裁决", declaration: "十日已到。回响该响了。", effect: "全效果激活，最终排名结算" }
+];
+
+const trainTemplates = [
+  { time: "06:00", name: "晨钟列车", effect: "发布当日试炼宣言、裁决生肖与方块属性调整" },
+  { time: "12:00", name: "正午列车", effect: "雾区商品波动，并触发回响钟声事件" },
+  { time: "18:00", name: "黄昏列车", effect: "规则之眼情报刷新，契约贡献进入锁定前结算" },
+  { time: "23:00", name: "午夜列车", effect: "雾区新商品到站，旧商品准备下架" },
+  { time: "23:55", name: "终焉列车", effect: "每日结算预告，五分钟倒计时钟鸣" }
+];
+
+const fogGoodsPool = [
+  ["青龙鳞片", "神兽遗物", "稀有", "一片泛着暗绿光泽的鳞片，触感冰凉，仿佛还在呼吸。"],
+  ["白虎利齿", "神兽遗物", "稀有", "齿尖有旧血的颜色，靠近时能听见低吼。"],
+  ["朱雀尾羽", "神兽遗物", "史诗", "羽尖不燃却发烫，像一条被折叠的火线。"],
+  ["玄武甲片", "神兽遗物", "精良", "沉得像城墙，背面刻着看不懂的水纹。"],
+  ["钟摆齿轮", "钟楼零件", "普通", "黄铜齿边磨损严重，仍然按十日节律转动。"],
+  ["时针碎片", "钟楼零件", "精良", "碎片上停着一个不存在的整点。"],
+  ["发条残段", "钟楼零件", "普通", "拉紧时会发出细小的汽笛声。"],
+  ["第三条规则", "规则碎片", "史诗", "纸面空白，只有在钟声响起时才浮现字迹。"],
+  ["破格残页", "规则碎片", "稀有", "边缘被火烧过，剩下的句子像故意留给你看。"],
+  ["车票残角", "列车遗落物", "普通", "没有车厢号，只有一句：不要上车。"],
+  ["汽笛回音", "列车遗落物", "精良", "装在玻璃瓶里的声音，开盖会让人短暂失神。"],
+  ["铁轨螺钉", "列车遗落物", "普通", "冰冷、结实，像固定了某种可能。"],
+  ["鼠眼石", "生肖符咒", "普通", "在暗处会自己寻找出口。"],
+  ["虎牙坠", "生肖符咒", "精良", "佩上后更容易做出不该做的决定。"],
+  ["羊契绳", "生肖符咒", "精良", "三股绳拧在一起，解不开，也断不了。"],
+  ["猴面铜牌", "生肖符咒", "稀有", "牌面总像在偷笑。"]
+];
+
+const oraclePool = [
+  ["雾区风向", "市场", "今日「神兽遗物」品类商品将在正午列车后明显波动。", "market_preview", 80, "钟楼顶层掉下来的一张纸条，上面只有几个字。"],
+  ["第七列", "战场", "今日第七列更容易成为生死线，硬降前多看一眼。", "battle_hint", 40, "纸条背面画着一条很细的竖线。"],
+  ["契约裂缝", "社交", "贡献排名第一的人未必拿到最多奖励，血契例外。", "pact_hint", 50, "墨水还没干，像刚从谁手里抢来。"],
+  ["午夜提前", "系统", "午夜列车有概率提前拨动雾区价格。", "train_hint", 120, "车票上的 23:00 被划了两次。"],
+  ["生肖偏袒", "系统", "当日生肖更偏袒敢于承担代价的试炼者。", "zodiac_hint", 90, "落款只有一个小小的生肖印。"],
+  ["低价陷阱", "市场", "灰蓝色商品的稳定，常常只是下一次坠落的前奏。", "market_warning", 60, "这不是提醒，是警告。"]
 ];
 
 const guilds = [
@@ -177,8 +236,131 @@ const state = {
     globalMuted: false,
     rageMode: false,
     nextEventAt: Date.now() + 30000
+  },
+  v2: {
+    dayKey: "",
+    fogGoods: [],
+    pacts: [],
+    oracleCards: [],
+    purchasedOracle: {},
+    trainLog: []
   }
 };
+
+function seeded(seed) {
+  let value = crypto.createHash("sha256").update(String(seed)).digest().readUInt32LE(0);
+  return () => {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+}
+
+function cycleNow(now = new Date()) {
+  const start = Date.UTC(2026, 0, 1, 0, 0, 0);
+  const current = now.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const elapsedDays = Math.max(0, Math.floor((current - start) / dayMs));
+  const dayNumber = (elapsedDays % 10) + 1;
+  const cycleNumber = Math.floor(elapsedDays / 10) + 1;
+  const zodiac = zodiacDays[dayNumber - 1];
+  const dayStartedAt = start + elapsedDays * dayMs;
+  const dayEndsAt = dayStartedAt + dayMs;
+  const activeBeastEvent = dayNumber === 3 ? "白虎" : dayNumber === 5 ? "朱雀" : dayNumber === 7 ? "玄武" : dayNumber === 10 ? "青龙" : null;
+  return {
+    cycleNumber,
+    dayNumber,
+    rulingZodiac: zodiac.zodiac,
+    zodiacCode: zodiac.code,
+    title: zodiac.title,
+    declaration: `${zodiac.zodiac}·${zodiac.code}：${zodiac.title}。${zodiac.declaration}`,
+    zodiacEffect: zodiac.effect,
+    activeBeastEvent,
+    dayStartedAt: new Date(dayStartedAt).toISOString(),
+    dayEndsAt: new Date(dayEndsAt).toISOString(),
+    dayRemaining: Math.max(0, dayEndsAt - current)
+  };
+}
+
+function trainScheduleFor(cycle = cycleNow()) {
+  const start = new Date(cycle.dayStartedAt);
+  return trainTemplates.map((item) => {
+    const [hour, minute] = item.time.split(":").map(Number);
+    const at = new Date(start);
+    at.setUTCHours(hour - 8, minute, 0, 0);
+    if (at < start) at.setUTCDate(at.getUTCDate() + 1);
+    return { ...item, at: at.toISOString(), passed: Date.now() > at.getTime() };
+  });
+}
+
+function rarityPrice(rarity) {
+  return { "普通": 180, "精良": 420, "稀有": 860, "史诗": 1680 }[rarity] || 300;
+}
+
+function generateFogGoods(cycle) {
+  const random = seeded(`fog-${cycle.cycleNumber}-${cycle.dayNumber}`);
+  const count = 8 + Math.floor(random() * 5);
+  const selected = [...fogGoodsPool].sort(() => random() - 0.5).slice(0, count);
+  return selected.map((item, index) => {
+    const [name, category, rarity, flavor] = item;
+    const volatility = Number((0.1 + random() * (cycle.rulingZodiac === "蛇" ? 0.48 : 0.28)).toFixed(2));
+    const basePrice = Math.round(rarityPrice(rarity) * (0.85 + random() * 0.5));
+    const drift = cycle.activeBeastEvent === "青龙" ? 1 + (random() > 0.5 ? 0.8 : -0.35) : 1 + (random() - 0.45) * volatility;
+    const currentPrice = Math.max(20, Math.round(basePrice * drift));
+    const trend = currentPrice > basePrice * 1.08 ? "rising" : currentPrice < basePrice * 0.92 ? "falling" : volatility > 0.28 ? "volatile" : "stable";
+    return {
+      id: `fg-${cycle.cycleNumber}-${cycle.dayNumber}-${index + 1}`,
+      name,
+      category,
+      rarity,
+      basePrice,
+      currentPrice,
+      volatility,
+      trend,
+      arrivalTime: cycle.dayStartedAt,
+      departureTime: cycle.dayEndsAt,
+      flavor,
+      priceHistory: [
+        { price: basePrice, time: cycle.dayStartedAt },
+        { price: currentPrice, time: new Date().toISOString() }
+      ]
+    };
+  });
+}
+
+function generateOracleCards(cycle) {
+  const random = seeded(`oracle-${cycle.cycleNumber}-${cycle.dayNumber}`);
+  return [...oraclePool].sort(() => random() - 0.5).slice(0, 6).map((item, index) => {
+    const [title, category, description, effectType, cost, flavor] = item;
+    const discount = cycle.rulingZodiac === "猴" ? 0.5 : 1;
+    return {
+      id: `oc-${cycle.cycleNumber}-${cycle.dayNumber}-${index + 1}`,
+      title,
+      category,
+      description,
+      effect: { type: effectType, data: { day: cycle.dayNumber, zodiac: cycle.rulingZodiac } },
+      cost: Math.max(10, Math.round(cost * discount)),
+      accuracy: Number(Math.min(1, 0.65 + random() * 0.28 + (cycle.rulingZodiac === "猴" ? 0.12 : 0)).toFixed(2)),
+      availableUntil: trainScheduleFor(cycle).find((train) => train.name === "黄昏列车")?.at || cycle.dayEndsAt,
+      flavor,
+      purchased: false
+    };
+  });
+}
+
+function ensureV2State() {
+  const cycle = cycleNow();
+  const dayKey = `${cycle.cycleNumber}-${cycle.dayNumber}`;
+  if (state.v2.dayKey !== dayKey || !state.v2.fogGoods?.length) {
+    state.v2.dayKey = dayKey;
+    state.v2.fogGoods = generateFogGoods(cycle);
+    state.v2.oracleCards = generateOracleCards(cycle);
+    state.v2.pacts = [];
+    state.v2.purchasedOracle = {};
+    state.v2.trainLog = [];
+    pushMessage("终焉列车", `【晨钟列车进站】今日试炼宣言：「${cycle.rulingZodiac}·${cycle.zodiacCode}：${cycle.title}」${cycle.zodiacEffect}`, "train", "全城广播");
+  }
+  return { cycle, trains: trainScheduleFor(cycle) };
+}
 
 function sendJson(res, data, status = 200) {
   const body = JSON.stringify(data);
@@ -341,7 +523,7 @@ function dbUserToPlayer(row, positions = []) {
 
 async function getPositions(userId) {
   if (!dbReady || !userId) return [];
-  const [rows] = await db.query("SELECT type, code, side, qty, cost, entry, created_at FROM user_positions WHERE user_id = ? ORDER BY id DESC LIMIT 50", [userId]);
+  const [rows] = await db.query("SELECT id, type, code, side, qty, cost, entry, created_at FROM user_positions WHERE user_id = ? ORDER BY id DESC LIMIT 50", [userId]);
   return rows.map((row) => ({ ...row, cost: Number(row.cost), entry: row.entry == null ? null : Number(row.entry) }));
 }
 
@@ -510,7 +692,7 @@ function loadPersistedState() {
   try {
     if (!fs.existsSync(stateFile)) return;
     const saved = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-    for (const key of ["bankerPool", "lossTarget", "inflation", "players", "accounts", "messages", "announcements", "guilds", "marketEvents", "guildBoss", "guildWar", "economy", "flags"]) {
+    for (const key of ["bankerPool", "lossTarget", "inflation", "players", "accounts", "messages", "announcements", "guilds", "marketEvents", "guildBoss", "guildWar", "economy", "flags", "v2"]) {
       if (saved[key] !== undefined) state[key] = saved[key];
     }
     if (Array.isArray(saved.stocks)) state.stocks = saved.stocks;
@@ -545,7 +727,8 @@ function saveState() {
       guildBoss: state.guildBoss,
       guildWar: state.guildWar,
       economy: state.economy,
-      flags: state.flags
+      flags: state.flags,
+      v2: state.v2
     }, null, 2));
   } catch (error) {
     console.error("Failed to save state", error);
@@ -651,6 +834,7 @@ function loginAccount(username, password) {
 }
 
 function snapshot(playerId) {
+  const v2 = ensureV2State();
   const player = playerId ? ensurePlayer(playerId) : {
     id: "admin-view",
     name: "后台观察者",
@@ -673,6 +857,20 @@ function snapshot(playerId) {
     mysql: mysqlStatus,
     external: externalData,
     world,
+    cycle: v2.cycle,
+    trains: v2.trains,
+    v2: {
+      cycle: v2.cycle,
+      trains: v2.trains,
+      fogGoods: state.v2.fogGoods,
+      pacts: state.v2.pacts,
+      oracleCards: state.v2.oracleCards,
+      npcs: v2Npcs,
+      channels: ["全城广播", "钟城广场", "契约频道", "生肖密语", "回响私语"],
+      rankings: rankingsV2(),
+      collections: collectionsFor(player),
+      upgradeTree: upgradeTreeFor(player)
+    },
     player,
     identity: playerId ? identityFor(player) : null,
     stocks: state.stocks,
@@ -686,7 +884,7 @@ function snapshot(playerId) {
     guildBoss: state.guildBoss,
     guildWar: state.guildWar,
     marketEvents: state.marketEvents,
-    npcs,
+    npcs: v2Npcs,
     missions: playerId ? missionsFor(player) : missionTemplates,
     shop: shopItems,
     campaigns,
@@ -736,6 +934,11 @@ function snapshotForPlayer(player) {
   const base = snapshot(null);
   return {
     ...base,
+    v2: {
+      ...base.v2,
+      collections: collectionsFor(player),
+      upgradeTree: upgradeTreeFor(player)
+    },
     player,
     identity: {
       mode: "account",
@@ -794,6 +997,59 @@ function leaderboards() {
   };
 }
 
+function rankingsV2() {
+  const players = Object.values(state.players);
+  const rows = (mapper, fallback) => [...players.map(mapper), ...fallback]
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .slice(0, 50)
+    .map((item, index) => ({ rank: index + 1, ...item }));
+  const fallback = [
+    { name: "齐夏", score: 12880 },
+    { name: "林檎", score: 9960 },
+    { name: "乔家劲", score: 8800 },
+    { name: "楚天秋", score: 7600 },
+    { name: "列车长", score: 6400 }
+  ];
+  return {
+    daily_marks: rows((p) => ({ name: p.name, score: p.lines * 100 + p.score }), fallback),
+    daily_fog: rows((p) => ({ name: p.name, score: Math.max(0, p.coins - state.economy.initialCoins) }), fallback.slice().reverse()),
+    daily_pact: rows((p) => ({ name: p.name, score: Number(p.stats?.guildActions || 0) * 300 + p.lines * 10 }), fallback),
+    cycle_total: rows((p) => ({ name: p.name, score: p.score + p.coins }), fallback),
+    beast_hall: rows((p) => ({ name: p.name, score: Number(p.stats?.beasts || 0) * 1000 + p.score }), fallback),
+    zodiac_album: rows((p) => ({ name: p.name, score: Number(p.stats?.zodiacMarks || 0) * 1000 + p.lines }), fallback)
+  };
+}
+
+function collectionsFor(player) {
+  const lineCount = Number(player?.lines || 0);
+  const zodiacMarks = zodiacDays.filter((item) => lineCount >= item.day * 30).map((item) => item.zodiac);
+  const beastMarks = [
+    lineCount >= 120 ? "白虎" : null,
+    Number(player?.score || 0) >= 5000 ? "朱雀" : null,
+    Number(player?.shields || 0) >= 3 ? "玄武" : null,
+    Number(player?.score || 0) >= 20000 ? "青龙" : null
+  ].filter(Boolean);
+  return {
+    zodiacMarks,
+    beastMarks,
+    titles: player?.titles || ["钟城试炼者"],
+    pathLevel: Math.min(7, 1 + Math.floor(lineCount / 120)),
+    pathProgress: lineCount % 120
+  };
+}
+
+function upgradeTreeFor(player) {
+  const stats = player?.stats || {};
+  return [
+    { category: "score", name: "方块分数", level: Math.min(5, Math.floor(Number(player?.score || 0) / 3000)), nextCost: 500 },
+    { category: "shield", name: "护盾上限", level: Math.min(5, Number(player?.shields || 0)), nextCost: 300 },
+    { category: "fee", name: "雾区手续费", level: Math.min(5, Math.floor(Number(stats.trades || 0) / 3)), nextCost: 200 },
+    { category: "oracle", name: "情报折扣", level: Math.min(5, Math.floor(Number(stats.oracle || 0) / 2)), nextCost: 100 },
+    { category: "pact", name: "契约贡献", level: Math.min(5, Math.floor(Number(stats.guildActions || 0) / 2)), nextCost: 500 },
+    { category: "train", name: "列车优先权", level: Math.min(3, Math.floor(Number(stats.signin || 0) / 5)), nextCost: 500 }
+  ];
+}
+
 function settleLines(player, lines, tags = []) {
   const base = lines * state.economy.lineReward * state.inflation;
   const crit = tags.includes("crit") ? lines * state.economy.critBonusPerLine * state.inflation : 0;
@@ -826,6 +1082,17 @@ function moveMarket() {
   for (const item of state.futures) {
     const swing = item.code === "TETRIS" ? 0.035 : 0.012;
     item.price = Number((item.price * (1 + (Math.random() - 0.5) * swing)).toFixed(item.code === "GOLD" ? 1 : 2));
+  }
+}
+
+function moveFogMarket() {
+  const { cycle } = ensureV2State();
+  for (const goods of state.v2.fogGoods) {
+    const zodiacMultiplier = cycle.rulingZodiac === "蛇" ? 2 : cycle.rulingZodiac === "鸡" ? 1.5 : 1;
+    const swing = (Math.random() - 0.48) * goods.volatility * zodiacMultiplier;
+    goods.currentPrice = Math.max(20, Math.round(goods.currentPrice * (1 + swing)));
+    goods.trend = swing > 0.04 ? "rising" : swing < -0.04 ? "falling" : Math.abs(swing) > 0.02 ? "volatile" : "stable";
+    goods.priceHistory = [...(goods.priceHistory || []), { price: goods.currentPrice, time: new Date().toISOString() }].slice(-24);
   }
 }
 
@@ -1079,6 +1346,224 @@ async function api(req, res) {
     const player = await getUserByToken(url.searchParams.get("sessionToken") || authFromReq(req));
     return sendJson(res, snapshotForPlayer(player));
   }
+  if (url.pathname === "/api/cycle/current") {
+    const { cycle } = ensureV2State();
+    return sendJson(res, { success: true, data: cycle });
+  }
+  if (url.pathname === "/api/cycle/trains") {
+    const { trains } = ensureV2State();
+    return sendJson(res, { success: true, data: trains });
+  }
+  if (url.pathname === "/api/trials/report" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const { cycle } = ensureV2State();
+    const lines = Math.max(0, Number(body.lines || 0));
+    const score = Math.max(0, Number(body.score || 0));
+    const duration = Math.max(0, Number(body.duration || 0));
+    const mode = String(body.mode || "normal");
+    const zodiacBoost = cycle.rulingZodiac === "牛" ? 1.2 : cycle.rulingZodiac === "鸡" ? 1.5 : 1;
+    const beastBoost = cycle.activeBeastEvent === "朱雀" ? 2 : cycle.activeBeastEvent === "玄武" && mode === "survival" ? 1.5 : 1;
+    const marks = Math.round((lines * 100 + score * 0.12 + duration * (mode === "survival" ? 10 : 1)) * zodiacBoost * beastBoost);
+    player.coins += marks;
+    player.score += score;
+    player.lines += lines;
+    player.stats.trials = Number(player.stats.trials || 0) + 1;
+    await saveDbPlayer(player);
+    pushMessage("方块试炼", `${player.name} 刻下 ${marks} 道钟痕（${cycle.rulingZodiac}日加成）`, "system", "全城广播");
+    return sendJson(res, { success: true, data: { player, marksEarned: marks, cycle } });
+  }
+  if (url.pathname === "/api/trials/history") {
+    const player = await currentPlayer(req);
+    return sendJson(res, { success: true, data: player ? [{ score: player.score, lines: player.lines, marks: player.coins, mode: "normal", createdAt: player.lastSeenAt }] : [] });
+  }
+  if (url.pathname === "/api/player/profile") {
+    const player = await currentPlayer(req);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    return sendJson(res, { success: true, data: { player, collections: collectionsFor(player), upgrades: upgradeTreeFor(player) } });
+  }
+  if (url.pathname === "/api/player/collections") {
+    const player = await currentPlayer(req);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    return sendJson(res, { success: true, data: collectionsFor(player) });
+  }
+  if (url.pathname === "/api/player/engravings") {
+    const player = await currentPlayer(req);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    return sendJson(res, { success: true, data: upgradeTreeFor(player) });
+  }
+  if (url.pathname === "/api/player/engrave" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const upgrade = upgradeTreeFor(player).find((item) => item.category === body.category);
+    if (!upgrade) return sendJson(res, { success: false, error: "升级项不存在" }, 400);
+    if (player.coins < upgrade.nextCost) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
+    player.coins -= upgrade.nextCost;
+    player.stats[`engrave_${upgrade.category}`] = Number(player.stats[`engrave_${upgrade.category}`] || 0) + 1;
+    await saveDbPlayer(player);
+    pushMessage("铭刻之书", `${player.name} 升级了「${upgrade.name}」`, "system", "全城广播");
+    return sendJson(res, { success: true, data: { player, upgrades: upgradeTreeFor(player) } });
+  }
+  if (url.pathname === "/api/fog/goods") {
+    ensureV2State();
+    let goods = state.v2.fogGoods;
+    if (url.searchParams.get("category")) goods = goods.filter((item) => item.category === url.searchParams.get("category"));
+    if (url.searchParams.get("rarity")) goods = goods.filter((item) => item.rarity === url.searchParams.get("rarity"));
+    return sendJson(res, { success: true, data: goods });
+  }
+  if (url.pathname.startsWith("/api/fog/goods/")) {
+    ensureV2State();
+    const id = decodeURIComponent(url.pathname.split("/").pop());
+    const goods = state.v2.fogGoods.find((item) => item.id === id);
+    return sendJson(res, { success: Boolean(goods), data: goods, error: goods ? undefined : "商品不存在" }, goods ? 200 : 404);
+  }
+  if (url.pathname === "/api/fog/positions") {
+    const player = await currentPlayer(req);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const positions = (player.positions || []).filter((item) => item.type === "fog").map((position) => {
+      const goods = state.v2.fogGoods.find((item) => item.id === position.code);
+      return { ...position, goods, currentPrice: goods?.currentPrice || position.entry || position.cost };
+    });
+    return sendJson(res, { success: true, data: positions });
+  }
+  if (url.pathname === "/api/fog/buy" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    ensureV2State();
+    const goods = state.v2.fogGoods.find((item) => item.id === body.goodsId);
+    const quantity = Math.max(1, Math.min(99, Number(body.quantity || 1)));
+    if (!goods) return sendJson(res, { success: false, error: "商品不存在" }, 404);
+    const fogCount = (player.positions || []).filter((item) => item.type === "fog").length;
+    if (fogCount >= 5) return sendJson(res, { success: false, error: "雾区持仓最多 5 种" }, 400);
+    const cost = goods.currentPrice * quantity;
+    if (player.coins < cost) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
+    player.coins -= cost;
+    player.stats.trades = Number(player.stats.trades || 0) + 1;
+    if (dbReady) await db.query("INSERT INTO user_positions (user_id, type, code, qty, cost, entry) VALUES (?, ?, ?, ?, ?, ?)", [player.userId, "fog", goods.id, String(quantity), cost, goods.currentPrice]);
+    await saveDbPlayer(player);
+    pushMessage("雾区交易所", `${player.name} 买入 ${goods.name} x${quantity}，列车已经记录这笔可能`, "system", "全城广播");
+    const fresh = await getUserById(player.userId);
+    return sendJson(res, { success: true, data: { player: fresh || player, goods } });
+  }
+  if (url.pathname === "/api/fog/sell" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const position = (player.positions || []).find((item) => String(item.id) === String(body.positionId));
+    if (!position || position.type !== "fog") return sendJson(res, { success: false, error: "持仓不存在" }, 404);
+    const goods = state.v2.fogGoods.find((item) => item.id === position.code);
+    const income = Math.round((goods?.currentPrice || Number(position.entry || 0)) * Number(position.qty || 1) * 0.98);
+    player.coins += income;
+    if (dbReady) await db.query("DELETE FROM user_positions WHERE id = ? AND user_id = ?", [position.id, player.userId]);
+    await saveDbPlayer(player);
+    pushMessage("雾区交易所", `${player.name} 卖出 ${goods?.name || position.code}，收回 ${income} 刻痕`, "system", "全城广播");
+    const fresh = await getUserById(player.userId);
+    return sendJson(res, { success: true, data: { player: fresh || player, income } });
+  }
+  if (url.pathname === "/api/pact/available") {
+    ensureV2State();
+    return sendJson(res, { success: true, data: state.v2.pacts.filter((pact) => pact.status === "open") });
+  }
+  if (url.pathname === "/api/pact/mine") {
+    const player = await currentPlayer(req);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const pact = state.v2.pacts.find((item) => item.members.some((member) => member.userId === player.id));
+    return sendJson(res, { success: true, data: pact || null });
+  }
+  if (url.pathname === "/api/pact/create" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const { cycle } = ensureV2State();
+    const fee = { "普通": cycle.rulingZodiac === "羊" ? 0 : 200, "生肖": 500, "神兽": 1000, "血契": 2000 }[body.type] ?? 200;
+    if (player.coins < fee) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
+    player.coins -= fee;
+    const pact = {
+      id: `p-${crypto.randomUUID().slice(0, 8)}`,
+      name: String(body.name || "回响三人").slice(0, 16),
+      type: String(body.type || "普通"),
+      openSlots: 2,
+      members: [{ userId: player.id, name: player.name, contribution: 0, joinedAt: new Date().toISOString() }],
+      totalContribution: 0,
+      rewardPool: 0,
+      zodiacBonus: cycle.rulingZodiac,
+      status: "open",
+      createdAt: new Date().toISOString()
+    };
+    state.v2.pacts.unshift(pact);
+    player.stats.guildActions = Number(player.stats.guildActions || 0) + 1;
+    await saveDbPlayer(player);
+    pushMessage("契约广场", `${player.name} 创建试炼契约「${pact.name}」`, "system", "全城广播");
+    return sendJson(res, { success: true, data: pact });
+  }
+  if (url.pathname === "/api/pact/join" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const pact = state.v2.pacts.find((item) => item.id === body.pactId && item.status === "open");
+    if (!pact) return sendJson(res, { success: false, error: "契约不存在" }, 404);
+    if (pact.members.some((member) => member.userId === player.id)) return sendJson(res, { success: false, error: "已经在契约中" }, 400);
+    if (pact.members.length >= 3) return sendJson(res, { success: false, error: "契约已满" }, 400);
+    pact.members.push({ userId: player.id, name: player.name, contribution: 0, joinedAt: new Date().toISOString() });
+    pact.openSlots = Math.max(0, 3 - pact.members.length);
+    player.stats.guildActions = Number(player.stats.guildActions || 0) + 1;
+    await saveDbPlayer(player);
+    pushMessage("契约广场", `${player.name} 加入试炼契约「${pact.name}」`, "system", "全城广播");
+    return sendJson(res, { success: true, data: pact });
+  }
+  if (url.pathname === "/api/pact/leave" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const pact = state.v2.pacts.find((item) => item.id === body.pactId);
+    if (!pact) return sendJson(res, { success: false, error: "契约不存在" }, 404);
+    pact.members = pact.members.filter((member) => member.userId !== player.id);
+    pact.openSlots = Math.max(0, 3 - pact.members.length);
+    return sendJson(res, { success: true, data: pact });
+  }
+  if (url.pathname === "/api/oracle/cards") {
+    ensureV2State();
+    return sendJson(res, { success: true, data: state.v2.oracleCards.filter((card) => !card.purchased) });
+  }
+  if (url.pathname === "/api/oracle/buy" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const card = state.v2.oracleCards.find((item) => item.id === body.cardId && !item.purchased);
+    if (!card) return sendJson(res, { success: false, error: "情报不存在或已售出" }, 404);
+    if (player.coins < card.cost) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
+    player.coins -= card.cost;
+    player.stats.oracle = Number(player.stats.oracle || 0) + 1;
+    card.purchased = true;
+    card.purchasedBy = player.id;
+    await saveDbPlayer(player);
+    pushMessage("规则之眼", `${player.name} 买走情报「${card.title}」`, "system", "全城广播");
+    return sendJson(res, { success: true, data: { card, player } });
+  }
+  if (url.pathname.startsWith("/api/rankings/")) {
+    const category = url.pathname.split("/").pop();
+    const data = rankingsV2()[category] || [];
+    return sendJson(res, { success: true, data: data.slice(0, Number(url.searchParams.get("limit") || 50)) });
+  }
+  if (url.pathname === "/api/broadcast/messages") {
+    const channel = url.searchParams.get("channel");
+    let messages = state.messages;
+    if (channel) messages = messages.filter((item) => item.channel === channel || (channel === "全城广播" && item.kind !== "chat"));
+    return sendJson(res, { success: true, data: messages.slice(0, Number(url.searchParams.get("limit") || 50)) });
+  }
+  if (url.pathname === "/api/broadcast/send" && req.method === "POST") {
+    const body = await readBody(req);
+    const player = await currentPlayer(req, body);
+    if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const channel = String(body.channel || "钟城广场").slice(0, 16);
+    pushMessage(player.name, String(body.content || "").slice(0, 160), "player", channel);
+    player.stats.chat = Number(player.stats.chat || 0) + 1;
+    await saveDbPlayer(player);
+    return sendJson(res, { success: true, data: state.messages.slice(0, 50) });
+  }
   if (url.pathname === "/api/line-clear" && req.method === "POST") {
     const body = await readBody(req);
     const player = await currentPlayer(req, body);
@@ -1283,9 +1768,10 @@ http.createServer((req, res) => {
 });
 
 setInterval(moveMarket, 4000);
+setInterval(moveFogMarket, 7000);
 setInterval(() => {
-  const npc = npcs[Math.floor(Math.random() * npcs.length)];
-  pushMessage(npc.name, npc.line, "chat", ["地虎", "青龙", "楚天秋"].includes(npc.name) ? "市场" : "世界");
+  const npc = v2Npcs[Math.floor(Math.random() * v2Npcs.length)];
+  pushMessage(npc.name, npc.line, "npc", ["地虎", "青龙", "楚天秋", "列车长"].includes(npc.name) ? "全城广播" : "钟城广场");
 }, 9000);
 setInterval(() => {
   if (Date.now() >= state.flags.nextEventAt) triggerWorldEvent();

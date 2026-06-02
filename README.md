@@ -1,111 +1,76 @@
-# 终焉钟城
+# 终焉钟城 V2
 
-融合俄罗斯方块、真实行情/新闻/天气、常规账号体系、聊天室和"终焉试炼"叙事的网页游戏原型。玩家作为试炼者进入不断重置的钟城，在方块、市场、公会与聊天里观察规则、选择代价。金币只是游戏内虚拟货币，无真实价值。
+十日轮回主题的沉浸式网页游戏原型。玩家作为试炼者进入钟渊系统统治的时钟城市，在方块试炼中获得刻痕，在雾区交易所买卖终焉商品，在试炼契约中临时结盟，并通过规则之眼购买情报。
+
+金币、股票、期货、公会等 V1 术语已废弃。V2 统一使用：刻痕、雾区商品、试炼契约、规则之眼、铭刻之书、终焉列车、生肖裁判、四象神兽。
 
 ## 线上地址
 
-- 玩家端：http://150.158.10.10:8080
-- 后台：http://150.158.10.10:18052/admin
+- 玩家端：[http://150.158.10.10:8080](http://150.158.10.10:8080)
+- 后台：[http://150.158.10.10:18052/admin](http://150.158.10.10:18052/admin)
 - 后台账号：`root`
 - 后台密码：`gambleMaster666`
 
-## 功能特性
+## V2 当前实现
 
-### 核心玩法
-- **方块战场**：标准 10×20 俄罗斯方块、7 种终焉属性方块、金币浮窗、战场事件
-- **时间战场**：时间倒流/钟摆/诅咒特殊方块、钟渊能量回溯、终焉进度条、昼夜速度、60 秒限时、精准刻度、节拍坠落
-- **局内反馈**：钟声铭刻视觉残留、双重铭刻、终焉低语分数台词和轻钟鸣提示
-
-### 终焉系统
-- **钟渊回响**：消行波纹、相邻格闪烁、3 秒回响窗口、可叠加分数加成和长尾钟鸣
-- **极道·钟渊之路**：七层永久境界、侧边栏进度、解锁飘字和纯视觉/音效奖励
-- **铭刻系统**：方块铭刻视觉效果与分数加成
-- **终焉低语**：NPC 对话与铭文视觉叙事
-
-### 社交与经济
-- **交易市场**：模拟 A 股、期货开仓、玩家持仓、钟渊控盘与市场事件
-- **公会系统**：公会广场、创建/加入公会、公会 BOSS、公会战
-- **活动中心**：每日任务、柜台商店、限时活动、存档状态
-- **排行榜**：钟痕榜、破局榜、回响榜、沉沦榜
-- **聊天室**：全局聊天、红包、十日终焉风格 NPC 阵容
-
-### 账号与后台
-- **常规账号体系**：注册、登录、退出、昵称、签到、金币、称号、股票/期货持仓
-- **真实信息层**：股票行情、财经新闻、济南天气、系统时间、版本信息
-- **后台控制台**：股票/期货操控、胜率参数、通胀参数、玩家金币、危险事件、世界事件、手动保存
-- **JSON 存档持久化**：账号、玩家资产、持仓、聊天、行情、公会和世界事件保存到 `data/state.json`
-- **MySQL 持久化**：账号数据迁移至 MySQL，支持多用户并发
+- 唯一入口 SPA：`public/index.html`
+- 三面板布局：左侧方块试炼，中部钟城广场，右侧铭刻之书，底部列车轨道
+- 方块试炼：10x20 棋盘，7 种终焉属性方块，支持方向键、旋转、硬降、暂存
+- 十日轮回：服务端动态计算周期、当日生肖、宣言、剩余时间和四象事件
+- 终焉列车：晨钟、正午、黄昏、午夜、终焉五班列车时刻表
+- 雾区交易所：每日生成 8-12 种商品，价格持续波动，可买入/卖出
+- 试炼契约：每日临时三人小队，可创建、加入、退出
+- 规则之眼：每日 6 张情报卡片，可购买并写入广播事件
+- 钟城广播：全城广播、钟城广场、契约频道等频道入口
+- 试炼者名录：当日刻痕、雾区、契约、十日总榜、神兽殿堂、生肖全图鉴
+- 铭刻之书：个人刻痕、消行、分数、雾区持仓、生肖/神兽印记、钟渊之路、铭刻升级
+- 后端 V2 API：周期、列车、试炼上报、雾区、契约、情报、广播、排行榜
+- Docker 部署：玩家端 `8080`，后台 `18052`
 
 ## 项目结构
 
-```
+```text
 .
 ├── Dockerfile
 ├── docker-compose.yml
 ├── package.json
-├── public/
-│   ├── index.html          # 游戏大厅
-│   ├── game.html          # 方块战场
-│   ├── market.html        # 交易市场
-│   ├── guilds.html        # 公会系统
-│   ├── activities.html    # 活动中心
-│   ├── rankings.html      # 排行榜
-│   ├── chat.html          # 聊天室
-│   ├── profile.html       # 个人资产
-│   ├── admin.html        # 管理后台
-│   ├── styles.css        # 全局样式
-│   ├── app.js            # 方块战场引擎
-│   └── js/
-│       ├── auth.js        # 登录/注册
-│       ├── chat.js        # 聊天室逻辑
-│       ├── lobby.js       # 大厅逻辑
-│       ├── market.js      # 交易市场逻辑
-│       ├── profile.js     # 个人页逻辑
-│       ├── rankings.js    # 排行榜逻辑
-│       ├── activities.js   # 活动中心逻辑
-│       ├── guilds.js      # 公会逻辑
-│       └── shared.js     # 公共工具函数
-├── server/
-│   └── index.js        # Express + MySQL 服务端
-└── docs/
-    └── WORLDVIEW.md    # 世界观与文案约束
+├── public
+│   ├── index.html          # V2 SPA 主入口
+│   ├── js
+│   │   └── v2-main.js      # V2 SPA 状态、UI、方块试炼
+│   ├── styles.css          # 旧样式 + V2 三面板样式
+│   └── *.html              # V1 兼容页面，入口已不再使用
+├── server
+│   └── index.js            # HTTP、MySQL、V2 API、定时事件
+└── docs
+    ├── DESIGN_V2.md        # V2 权威设计文档
+    └── WORLDVIEW.md        # V2 世界观与文案约束
 ```
 
-## 功能架构
+## V2 API 摘要
 
-当前采用轻量多页面架构，先把产品边界拆清楚，避免所有功能塞在一个页面里。
-
-世界观与文案约束见：[docs/WORLDVIEW.md](docs/WORLDVIEW.md)
-
-```
-玩家端 8080
-├── 大厅 /index.html
-├── 方块战场 /game.html
-├── 交易市场 /market.html
-├── 公会 /guilds.html
-├── 活动 /activities.html
-├── 排行 /rankings.html
-├── 聊天 /chat.html
-└── 资产 /profile.html
-
-后台端 18052
-└── 管理后台 /admin
-
-服务端领域
-├── account：MySQL 用户、登录会话、账号状态
-├── player：金币、分数、签到、称号、持仓
-├── tetris：消行结算、属性奖励、战场事件
-├── market：股票、期货、钟渊控盘、市场事件
-├── guild：公会、公会 BOSS、公会战
-├── activity：每日任务、柜台商店、限时活动
-├── chat：全局消息、红包、NPC 自动发言
-├── ranking：每日/每周排行榜
-└── admin：钟渊控制台、危险操作、经济调控
+```text
+GET  /api/cycle/current
+GET  /api/cycle/trains
+POST /api/trials/report
+GET  /api/player/profile
+POST /api/player/engrave
+GET  /api/fog/goods
+POST /api/fog/buy
+POST /api/fog/sell
+GET  /api/pact/available
+POST /api/pact/create
+POST /api/pact/join
+GET  /api/oracle/cards
+POST /api/oracle/buy
+GET  /api/rankings/:category
+GET  /api/broadcast/messages
+POST /api/broadcast/send
 ```
 
-## 本地开发说明
+## 本地说明
 
-本地只做代码编辑和版本管理，不在本地启动调试服务。调试统一部署到服务器 `150.158.10.10` 后进行。
+本地只做代码编辑和 Git 版本管理，不在本地调试。调试统一部署到 `150.158.10.10` 后进行。
 
 ## 服务器部署
 
@@ -118,13 +83,7 @@
 部署命令：
 
 ```bash
-docker-compose up
-```
-
-查看容器：
-
-```bash
-docker ps --filter name=tetris-gambling-casino
+docker-compose up -d --build
 ```
 
 查看日志：
@@ -133,18 +92,10 @@ docker ps --filter name=tetris-gambling-casino
 docker logs --tail=100 tetris-gambling-casino
 ```
 
-## 注意事项
+## 后续路线
 
-- 服务器 Docker Compose 版本较旧，`docker-compose.yml` 使用 `version: "2.2"`。
-- Docker 基础镜像使用华为云镜像源，避免服务器直连 Docker Hub 超时。
-- 前端已兼容普通 HTTP 环境，避免 `crypto.randomUUID()` 在非安全上下文不可用导致页面脚本中断。
-- MySQL 容器监听宿主机 `33066`，应用通过 Docker 内网连接 `mysql:3306`。
-- 钟城世界观文案遵循 `docs/WORLDVIEW.md` 中的叙事约束，保持"十日终焉"风格。
-
-## 下一阶段建议
-
-1. 将更多游戏状态从内存迁移到 MySQL 表。
-2. 加 WebSocket，让行情、聊天、PVP 干扰和全服事件实时推送。
-3. 把俄罗斯方块战场拆成单人、PVP、公会 BOSS 三种模式。
-4. 后台细化权限和操作日志，危险操作做二次确认与回滚记录。
-5. 完成股票 T+1 卖出、期货强平、排行榜每日结算定时任务。
+1. 将 V2 雾区、契约、情报、铭刻升级从内存/兼容表迁移到独立 MySQL 表。
+2. 加 WebSocket，把广播、列车、雾区价格、排行榜实时推送到 SPA。
+3. 按 `docs/DESIGN_V2.md` 拆分 `server/index.js` 为 controllers/services/models。
+4. 把方块试炼拆成 `js/tetris/*` 模块，并补 PVP、玄武生存、朱雀涅槃模式。
+5. 为列车进站、生肖更替、四象神兽降临加入音效和全屏动画。

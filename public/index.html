@@ -3,72 +3,94 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>终焉钟城大厅</title>
+    <title>终焉钟城 V2</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
-  <body>
-    <header class="game-header">
-      <a class="brand" href="/index.html">终焉钟城</a>
-      <nav class="main-nav">
-        <a data-nav href="/index.html">大厅</a>
-        <a data-nav href="/game.html">方块战场</a>
-        <a data-nav href="/market.html">交易市场</a>
-        <a data-nav href="/guilds.html">公会</a>
-        <a data-nav href="/activities.html">活动</a>
-        <a data-nav href="/rankings.html">排行</a>
-        <a data-nav href="/chat.html">聊天</a>
-        <a data-nav href="/profile.html">资产</a>
-      </nav>
-      <div class="header-stats"><span data-player-name>玩家</span><b data-player-coins>1000</b><small>在线 <i data-online>0</i></small></div>
-    </header>
-
-    <main class="page-shell lobby-grid">
-      <section class="hero-band">
-        <div>
-          <h1>终焉钟城</h1>
-          <p>方块铸币，行情下注，公会翻盘。</p>
-          <small id="nextEvent">系统事件加载中...</small>
+  <body class="v2-body">
+    <div id="app" class="v2-app">
+      <header class="v2-header">
+        <button id="centerToggle" class="icon-btn" type="button">≡</button>
+        <div class="v2-brand">
+          <b>终焉钟城</b>
+          <span id="cycleTitle">第--天 · 钟声校准中</span>
         </div>
-        <a class="primary-link" href="/game.html">进入钟渊试炼</a>
-      </section>
+        <div class="v2-clock">
+          <span id="serverClock">同步时间中...</span>
+          <small id="dayRemain">剩余 --:--:--</small>
+        </div>
+        <div class="v2-player">
+          <span id="playerName">未登录</span>
+          <b><i id="playerMarks">0</i> 刻痕</b>
+          <button id="authBtn" type="button">登录 / 注册</button>
+        </div>
+      </header>
 
-      <section class="kpi-row">
-        <div><span>钟渊池</span><strong id="bankerPool">0</strong></div>
-        <div><span>公会战</span><strong id="guildWar">等待开赛</strong></div>
-        <div><span>公会 BOSS</span><strong id="bossHpText">加载中</strong><div class="bar"><i id="bossHp"></i></div></div>
-      </section>
+      <aside class="v2-left">
+        <section class="trial-panel">
+          <div class="panel-head">
+            <div>
+              <h1>方块试炼</h1>
+              <p id="zodiacEffect">等待晨钟列车宣告规则</p>
+            </div>
+            <button id="startTrial" type="button">开始试炼</button>
+          </div>
+          <canvas id="trialBoard" width="300" height="600"></canvas>
+          <div class="trial-stats">
+            <span>分数 <b id="trialScore">0</b></span>
+            <span>消行 <b id="trialLines">0</b></span>
+            <span>连击 <b id="trialCombo">0</b></span>
+            <span>暂存 <b id="holdPiece">--</b></span>
+          </div>
+          <div class="trial-help">←/→ 移动，↓ 软降，↑/Z 旋转，空格硬降，C 暂存</div>
+        </section>
+      </aside>
 
-      <section class="panel">
-        <h2>股票热榜</h2>
-        <div id="stocks" class="market-list"></div>
-      </section>
+      <main class="v2-center">
+        <nav class="plaza-tabs">
+          <button data-tab="broadcast" class="active">广播</button>
+          <button data-tab="rankings">名录</button>
+          <button data-tab="fog">雾区</button>
+          <button data-tab="pact">契约</button>
+          <button data-tab="oracle">情报</button>
+        </nav>
+        <section id="tabContent" class="plaza-content"></section>
+      </main>
 
-      <section class="panel">
-        <h2>期货雾区</h2>
-        <div id="futures" class="market-list"></div>
-      </section>
+      <aside class="v2-right">
+        <section class="chronicle">
+          <div class="panel-head">
+            <div>
+              <h2>铭刻之书</h2>
+              <p id="identityNo">试炼者编号：--</p>
+            </div>
+            <button id="rightToggle" class="icon-btn" type="button">收</button>
+          </div>
+          <div id="chronicleContent"></div>
+        </section>
+      </aside>
 
-      <section class="panel">
-        <h2>天道参照</h2>
-        <div id="insightCard" class="insight-card"></div>
-      </section>
+      <footer class="v2-footer">
+        <div id="trainRail" class="train-rail">下一班列车：同步中...</div>
+        <div id="railBroadcast">钟楼仍在校准。</div>
+      </footer>
+    </div>
 
-      <section class="panel">
-        <h2>今日排行榜</h2>
-        <ol id="dailyRanks" class="rank-list"></ol>
-      </section>
+    <dialog id="authDialog" class="auth-dialog">
+      <form method="dialog" id="authForm">
+        <h2>入城登记</h2>
+        <input id="authUsername" autocomplete="username" placeholder="账号">
+        <input id="authPassword" type="password" autocomplete="current-password" placeholder="密码">
+        <input id="authNickname" placeholder="昵称（注册时使用）">
+        <div class="auth-actions">
+          <button id="loginBtn" value="login" type="submit">登录</button>
+          <button id="registerBtn" value="register" type="submit">注册</button>
+          <button value="cancel" type="submit">取消</button>
+        </div>
+        <p id="authError"></p>
+      </form>
+    </dialog>
 
-      <section class="panel">
-        <h2>今日任务</h2>
-        <div id="missionPreview" class="mission-list"></div>
-        <a class="ghost-link block-link" href="/activities.html">打开活动中心</a>
-      </section>
-
-      <section class="panel">
-        <h2>全服情绪</h2>
-        <div id="chat" class="chat-log short"></div>
-      </section>
-    </main>
-    <script type="module" src="/js/lobby.js"></script>
+    <div id="toast" class="v2-toast"></div>
+    <script type="module" src="/js/v2-main.js"></script>
   </body>
 </html>
