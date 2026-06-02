@@ -1550,20 +1550,24 @@ function ensureRenderLoop() {
 }
 
 function animateTrial(now) {
-  renderFrame = 0;
-  const delta = Math.min(80, now - (trial.lastFrame || now));
-  trial.lastFrame = now;
-  if (trial.running) {
-    updateModeClock(now);
-    if (trial.piece && collide(trial.piece, 0, 1)) trial.lockElapsed += delta;
-    trial.dropElapsed += delta;
-    const interval = trialDropInterval();
-    while (trial.dropElapsed >= interval && trial.running) {
-      trial.dropElapsed -= interval;
-      drop();
+  try {
+    renderFrame = 0;
+    const delta = Math.min(80, now - (trial.lastFrame || now));
+    trial.lastFrame = now;
+    if (trial.running) {
+      updateModeClock(now);
+      if (trial.piece && collide(trial.piece, 0, 1)) trial.lockElapsed += delta;
+      trial.dropElapsed += delta;
+      const interval = trialDropInterval();
+      while (trial.dropElapsed >= interval && trial.running) {
+        trial.dropElapsed -= interval;
+        drop();
+      }
     }
+    drawTrial(now, delta);
+  } catch (e) {
+    console.error("[Trial] animateTrial error:", e.message, e.stack);
   }
-  drawTrial(now, delta);
   if (trial.running || hasLiveEffects()) ensureRenderLoop();
 }
 
@@ -1743,18 +1747,16 @@ function updateTrialChrome() {
 function drawTrial(now = performance.now(), delta = 16) {
   updateTrialEffects(delta);
   const canvas = $("#trialBoard");
+  if (!canvas) return;
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const renderW = Math.max(200, Math.round(rect.width));
-  if (renderW > 0) {
-    trial.cell = Math.max(18, Math.min(36, Math.floor(renderW / trial.cols)));
-  }
   const cssWidth = trial.cols * trial.cell;
   const cssHeight = trial.rows * trial.cell;
-  canvas.width = cssWidth * dpr;
-  canvas.height = cssHeight * dpr;
-  // 让 CSS 控制显示尺寸，不覆盖 style
+  if (canvas.width !== cssWidth * dpr || canvas.height !== cssHeight * dpr) {
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const shakeActive = now < trial.effects.shakeUntil;
   const shakeX = shakeActive ? (Math.random() - 0.5) * trial.effects.shakePower * 2 : 0;
@@ -1873,6 +1875,16 @@ function startTrial() {
   trial.hold = null;
   trial.canHold = true;
   trial.running = true;
+  // 一次性地根据画布容器宽度自适应 cell（之后不变）
+  (() => {
+    const board = $("#trialBoard");
+    if (board) {
+      const rw = Math.max(200, Math.round(board.getBoundingClientRect().width));
+      trial.cell = Math.max(18, Math.min(36, Math.floor(rw / trial.cols)));
+    }
+    // 否则保持初始化时的 30
+  })();
+  console.log("[Trial] started: cell=" + trial.cell + " cols=" + trial.cols + " rows=" + trial.rows + " piece=" + JSON.stringify(trial.piece?.type) + " next=" + JSON.stringify(trial.next?.type));
   trial.score = 0;
   trial.lines = 0;
   trial.combo = 0;
