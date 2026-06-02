@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const mysql = require("mysql2/promise");
+const WebSocket = require("ws");
 
 const root = path.join(__dirname, "..");
 const publicDir = path.join(root, "public");
@@ -25,6 +26,9 @@ const dbConfig = {
 let db = null;
 let dbReady = false;
 let mysqlStatus = "connecting";
+let wsServer = null;
+const sockets = new Set();
+const broadcastRate = new Map();
 const world = {
   name: "终焉钟城",
   tagline: "十日轮回，钟声为证",
@@ -360,6 +364,93 @@ function ensureV2State() {
   return { cycle, trains: trainScheduleFor(cycle) };
 }
 
+async function syncV2Database() {
+  if (!dbReady) return;
+  const { cycle } = ensureV2State();
+  const dayKey = state.v2.dayKey;
+  const [fogRows] = await db.query("SELECT * FROM v2_fog_goods WHERE day_key=? AND is_active=1 ORDER BY id", [dayKey]);
+  if (fogRows.length) {
+    state.v2.fogGoods = fogRows.map((row) => ({
+      ...decodeJson(row.data_json, {}),
+      currentPrice: Number(row.current_price),
+      trend: row.trend
+    }));
+  } else {
+    for (const goods of state.v2.fogGoods) await persistFogGoods(goods);
+  }
+
+  const [cardRows] = await db.query("SELECT * FROM v2_oracle_cards WHERE day_key=? ORDER BY id", [dayKey]);
+  if (cardRows.length) {
+    state.v2.oracleCards = cardRows.map((row) => ({
+      ...decodeJson(row.data_json, {}),
+      purchased: Boolean(row.is_purchased),
+      purchasedBy: row.purchased_by || null
+    }));
+  } else {
+    for (const card of state.v2.oracleCards) await persistOracleCard(card);
+  }
+
+  const [pactRows] = await db.query("SELECT * FROM v2_pacts WHERE day_key=? ORDER BY created_at DESC", [dayKey]);
+  const pacts = [];
+  for (const pactRow of pactRows) {
+    const [members] = await db.query("SELECT user_id, name, contribution, joined_at FROM v2_pact_members WHERE pact_id=? ORDER BY joined_at", [pactRow.id]);
+    pacts.push({
+      id: pactRow.id,
+      name: pactRow.name,
+      type: pactRow.type,
+      openSlots: Math.max(0, 3 - members.length),
+      members: members.map((member) => ({
+        userId: member.user_id,
+        name: member.name,
+        contribution: Number(member.contribution || 0),
+        joinedAt: member.joined_at
+      })),
+      totalContribution: members.reduce((sum, member) => sum + Number(member.contribution || 0), 0),
+      rewardPool: Number(pactRow.reward_pool || 0),
+      zodiacBonus: pactRow.zodiac_bonus || cycle.rulingZodiac,
+      status: pactRow.status,
+      createdAt: pactRow.created_at,
+      lockedAt: pactRow.locked_at,
+      dissolvedAt: pactRow.dissolved_at
+    });
+  }
+  state.v2.pacts = pacts;
+}
+
+async function persistFogGoods(goods) {
+  if (!dbReady || !goods?.id) return;
+  await db.query(`
+    INSERT INTO v2_fog_goods (id, day_key, data_json, current_price, trend, is_active)
+    VALUES (?, ?, ?, ?, ?, 1)
+    ON DUPLICATE KEY UPDATE data_json=VALUES(data_json), current_price=VALUES(current_price), trend=VALUES(trend), is_active=1
+  `, [goods.id, state.v2.dayKey, JSON.stringify(goods), Math.round(goods.currentPrice), goods.trend || "stable"]);
+}
+
+async function persistOracleCard(card) {
+  if (!dbReady || !card?.id) return;
+  await db.query(`
+    INSERT INTO v2_oracle_cards (id, day_key, data_json, is_purchased, purchased_by, purchased_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE data_json=VALUES(data_json), is_purchased=VALUES(is_purchased), purchased_by=VALUES(purchased_by), purchased_at=VALUES(purchased_at)
+  `, [card.id, state.v2.dayKey, JSON.stringify(card), card.purchased ? 1 : 0, card.purchasedBy || null, card.purchased ? new Date() : null]);
+}
+
+async function persistPact(pact) {
+  if (!dbReady || !pact?.id) return;
+  await db.query(`
+    INSERT INTO v2_pacts (id, day_key, name, type, status, reward_pool, zodiac_bonus, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE name=VALUES(name), type=VALUES(type), status=VALUES(status), reward_pool=VALUES(reward_pool), zodiac_bonus=VALUES(zodiac_bonus)
+  `, [pact.id, state.v2.dayKey, pact.name, pact.type, pact.status || "open", Number(pact.rewardPool || 0), pact.zodiacBonus || null, new Date(pact.createdAt || Date.now())]);
+  for (const member of pact.members || []) {
+    await db.query(`
+      INSERT INTO v2_pact_members (pact_id, user_id, name, contribution, joined_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE name=VALUES(name), contribution=VALUES(contribution)
+    `, [pact.id, member.userId, member.name, Number(member.contribution || 0), new Date(member.joinedAt || Date.now())]);
+  }
+}
+
 function sendJson(res, data, status = 200) {
   const body = JSON.stringify(data);
   res.writeHead(status, {
@@ -409,6 +500,7 @@ async function connectMysql(retries = 30) {
       await initMysqlSchema();
       dbReady = true;
       mysqlStatus = "ready";
+      await syncV2Database();
       console.log(`MySQL connected: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
       return;
     } catch (error) {
@@ -475,6 +567,95 @@ async function initMysqlSchema() {
       entry DECIMAL(14,2) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX(user_id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS v2_fog_goods (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      day_key VARCHAR(32) NOT NULL,
+      data_json JSON NOT NULL,
+      current_price INT NOT NULL,
+      trend VARCHAR(24) NOT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX(day_key),
+      INDEX(is_active)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS v2_pacts (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      day_key VARCHAR(32) NOT NULL,
+      name VARCHAR(32) NOT NULL,
+      type VARCHAR(16) NOT NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'open',
+      reward_pool INT NOT NULL DEFAULT 0,
+      zodiac_bonus VARCHAR(8) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      locked_at TIMESTAMP NULL,
+      dissolved_at TIMESTAMP NULL,
+      INDEX(day_key),
+      INDEX(status)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS v2_pact_members (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      pact_id VARCHAR(64) NOT NULL,
+      user_id VARCHAR(64) NOT NULL,
+      name VARCHAR(32) NOT NULL,
+      contribution INT NOT NULL DEFAULT 0,
+      joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_v2_pact_user (pact_id, user_id),
+      INDEX(user_id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS v2_oracle_cards (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      day_key VARCHAR(32) NOT NULL,
+      data_json JSON NOT NULL,
+      is_purchased TINYINT(1) NOT NULL DEFAULT 0,
+      purchased_by VARCHAR(64) NULL,
+      purchased_at TIMESTAMP NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX(day_key),
+      INDEX(is_purchased)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS v2_player_upgrades (
+      user_id VARCHAR(64) NOT NULL,
+      category VARCHAR(24) NOT NULL,
+      level TINYINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY(user_id, category)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS v2_trial_records (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      user_id VARCHAR(64) NOT NULL,
+      day_key VARCHAR(32) NOT NULL,
+      score INT NOT NULL DEFAULT 0,
+      lines_cleared INT NOT NULL DEFAULT 0,
+      duration_sec INT NOT NULL DEFAULT 0,
+      mode VARCHAR(24) NOT NULL DEFAULT 'normal',
+      marks_earned INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX(user_id),
+      INDEX(day_key)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS v2_oracle_purchases (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id VARCHAR(64) NOT NULL,
+      card_id VARCHAR(64) NOT NULL,
+      effect_type VARCHAR(32) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_v2_oracle_user_card (user_id, card_id)
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
 }
@@ -606,16 +787,25 @@ function serveFile(req, res, fallback = "index.html") {
   fs.createReadStream(file).pipe(res);
 }
 
+function wsBroadcast(type, payload) {
+  const body = JSON.stringify({ type, payload, at: new Date().toISOString() });
+  for (const socket of sockets) {
+    if (socket.readyState === WebSocket.OPEN) socket.send(body);
+  }
+}
+
 function pushMessage(author, text, kind = "chat", channel = "世界") {
-  state.messages.unshift({
+  const message = {
     id: crypto.randomUUID(),
     at: new Date().toISOString(),
     author,
     text,
     kind,
     channel
-  });
+  };
+  state.messages.unshift(message);
   state.messages = state.messages.slice(0, 80);
+  wsBroadcast(kind === "train" ? "train" : kind === "npc" ? "npc_speak" : "chat", message);
 }
 
 function ensurePlayer(id) {
@@ -684,6 +874,11 @@ function normalizeAccount(account, username) {
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function beijingDateKey(value = Date.now()) {
+  const date = new Date(value);
+  return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function loadPersistedState() {
@@ -1038,14 +1233,85 @@ function collectionsFor(player) {
 
 function upgradeTreeFor(player) {
   const stats = player?.stats || {};
+  const level = (category, max = 5) => Math.max(0, Math.min(max, Number(stats[`engrave_${category}`] || 0)));
+  const cost = (category, base) => Math.round(base * Math.pow(2.15, level(category)));
   return [
-    { category: "score", name: "方块分数", level: Math.min(5, Math.floor(Number(player?.score || 0) / 3000)), nextCost: 500 },
-    { category: "shield", name: "护盾上限", level: Math.min(5, Number(player?.shields || 0)), nextCost: 300 },
-    { category: "fee", name: "雾区手续费", level: Math.min(5, Math.floor(Number(stats.trades || 0) / 3)), nextCost: 200 },
-    { category: "oracle", name: "情报折扣", level: Math.min(5, Math.floor(Number(stats.oracle || 0) / 2)), nextCost: 100 },
-    { category: "pact", name: "契约贡献", level: Math.min(5, Math.floor(Number(stats.guildActions || 0) / 2)), nextCost: 500 },
-    { category: "train", name: "列车优先权", level: Math.min(3, Math.floor(Number(stats.signin || 0) / 5)), nextCost: 500 }
+    { category: "score", name: "方块分数", level: level("score"), nextCost: cost("score", 500), effect: `试炼刻痕 +${level("score") * 5}%` },
+    { category: "shield", name: "护盾上限", level: level("shield"), nextCost: cost("shield", 300), effect: `护城钟壳上限 ${1 + level("shield")}` },
+    { category: "fee", name: "雾区手续费", level: level("fee"), nextCost: cost("fee", 200), effect: `卖出手续费 ${Math.max(1, 5 - level("fee"))}%` },
+    { category: "oracle", name: "情报折扣", level: level("oracle"), nextCost: cost("oracle", 100), effect: `情报价格 -${level("oracle") * 5}%` },
+    { category: "pact", name: "契约贡献", level: level("pact"), nextCost: cost("pact", 500), effect: `契约贡献 +${level("pact") * 5}%` },
+    { category: "train", name: "列车优先权", level: level("train", 3), nextCost: Math.round(500 * Math.pow(2.2, level("train", 3))), effect: `列车提醒提前 ${level("train", 3)} 分钟` }
   ];
+}
+
+function upgradeLevel(player, category, max = 5) {
+  return Math.max(0, Math.min(max, Number(player?.stats?.[`engrave_${category}`] || 0)));
+}
+
+function zodiacTrialBoost(cycle, report = {}) {
+  const lines = Number(report.lines || 0);
+  const duration = Number(report.duration || 0);
+  const mode = String(report.mode || "normal");
+  const table = {
+    "鼠": lines > 0 ? 1.12 : 1,
+    "牛": 1 + Math.min(0.3, lines * 0.04),
+    "虎": mode === "pvp" ? 1.5 : 1.08,
+    "兔": Number(report.hardDrops || 0) >= 30 ? 1.3 : 1.12,
+    "龙": 1.25,
+    "蛇": 1.05,
+    "马": mode === "survival" || duration >= 180 ? 1.5 : 1.08,
+    "羊": 1.1,
+    "猴": 1.08,
+    "鸡": 1.5
+  };
+  return table[cycle.rulingZodiac] || 1;
+}
+
+function beastTrialBoost(cycle, report = {}) {
+  const mode = String(report.mode || "normal");
+  if (cycle.activeBeastEvent === "白虎") return mode === "pvp" ? 1.8 : 1.15;
+  if (cycle.activeBeastEvent === "朱雀") return 2;
+  if (cycle.activeBeastEvent === "玄武") return mode === "survival" ? 1.8 : 1.12;
+  if (cycle.activeBeastEvent === "青龙") return 1.5;
+  return 1;
+}
+
+async function addPactContribution(player, marks) {
+  const pact = state.v2.pacts.find((item) => item.members.some((member) => member.userId === player.id));
+  if (!pact) return;
+  const member = pact.members.find((item) => item.userId === player.id);
+  const oracleBoost = Number(player.stats.oraclePactBoost || 0) > 0 ? 0.2 : 0;
+  const gain = Math.round(marks * (1 + upgradeLevel(player, "pact") * 0.05 + oracleBoost));
+  if (oracleBoost) player.stats.oraclePactBoost -= 1;
+  member.contribution = Number(member.contribution || 0) + gain;
+  pact.totalContribution = pact.members.reduce((sum, item) => sum + Number(item.contribution || 0), 0);
+  pact.rewardPool = Math.round(pact.totalContribution * (pact.zodiacBonus === "羊" ? 0.2 : 0.1));
+  await persistPact(pact);
+  wsBroadcast("pact_update", { pact });
+}
+
+async function applyOracleEffect(player, card) {
+  const type = card.effect?.type;
+  if (type === "market_preview" || type === "market_warning") {
+    const category = type === "market_warning" ? "列车遗落物" : "神兽遗物";
+    for (const goods of state.v2.fogGoods.filter((item) => item.category === category)) {
+      const direction = type === "market_warning" ? 0.92 : 1.12;
+      goods.currentPrice = Math.max(20, Math.round(goods.currentPrice * direction));
+      goods.trend = direction > 1 ? "rising" : "falling";
+      goods.priceHistory = [...(goods.priceHistory || []), { price: goods.currentPrice, time: new Date().toISOString() }].slice(-24);
+      await persistFogGoods(goods);
+    }
+    wsBroadcast("fog_price", state.v2.fogGoods.filter((item) => item.category === category).map((goods) => ({ goodsId: goods.id, name: goods.name, newPrice: goods.currentPrice, trend: goods.trend })));
+  }
+  if (type === "battle_hint") player.stats.oracleBattleBoost = Number(player.stats.oracleBattleBoost || 0) + 1;
+  if (type === "zodiac_hint") player.stats.oracleZodiacBoost = Number(player.stats.oracleZodiacBoost || 0) + 1;
+  if (type === "pact_hint") player.stats.oraclePactBoost = Number(player.stats.oraclePactBoost || 0) + 1;
+  if (type === "train_hint") {
+    state.v2.trainLog.unshift({ at: new Date().toISOString(), title: "午夜列车偏移", text: `${player.name} 触发列车情报，雾区将在下一轮波动前提前预警。` });
+    state.v2.trainLog = state.v2.trainLog.slice(0, 20);
+    wsBroadcast("train", state.v2.trainLog[0]);
+  }
 }
 
 function settleLines(player, lines, tags = []) {
@@ -1083,15 +1349,19 @@ function moveMarket() {
   }
 }
 
-function moveFogMarket() {
+async function moveFogMarket() {
   const { cycle } = ensureV2State();
+  const changed = [];
   for (const goods of state.v2.fogGoods) {
     const zodiacMultiplier = cycle.rulingZodiac === "蛇" ? 2 : cycle.rulingZodiac === "鸡" ? 1.5 : 1;
     const swing = (Math.random() - 0.48) * goods.volatility * zodiacMultiplier;
     goods.currentPrice = Math.max(20, Math.round(goods.currentPrice * (1 + swing)));
     goods.trend = swing > 0.04 ? "rising" : swing < -0.04 ? "falling" : Math.abs(swing) > 0.02 ? "volatile" : "stable";
     goods.priceHistory = [...(goods.priceHistory || []), { price: goods.currentPrice, time: new Date().toISOString() }].slice(-24);
+    changed.push({ goodsId: goods.id, name: goods.name, newPrice: goods.currentPrice, trend: goods.trend });
+    await persistFogGoods(goods);
   }
+  if (changed.length) wsBroadcast("fog_price", changed);
 }
 
 function triggerWorldEvent() {
@@ -1361,13 +1631,30 @@ async function api(req, res) {
     const score = Math.max(0, Number(body.score || 0));
     const duration = Math.max(0, Number(body.duration || 0));
     const mode = String(body.mode || "normal");
-    const zodiacBoost = cycle.rulingZodiac === "牛" ? 1.2 : cycle.rulingZodiac === "鸡" ? 1.5 : 1;
-    const beastBoost = cycle.activeBeastEvent === "朱雀" ? 2 : cycle.activeBeastEvent === "玄武" && mode === "survival" ? 1.5 : 1;
-    const marks = Math.round((lines * 100 + score * 0.12 + duration * (mode === "survival" ? 10 : 1)) * zodiacBoost * beastBoost);
+    const zodiacBoost = zodiacTrialBoost(cycle, body);
+    const beastBoost = beastTrialBoost(cycle, body);
+    const engravingBoost = 1 + upgradeLevel(player, "score") * 0.05;
+    const oracleBoost = 1 + (Number(player.stats.oracleBattleBoost || 0) > 0 ? 0.15 : 0) + (Number(player.stats.oracleZodiacBoost || 0) > 0 ? 0.1 : 0);
+    const marks = Math.round((lines * 100 + score * 0.12 + duration * (mode === "survival" ? 10 : 1)) * zodiacBoost * beastBoost * engravingBoost * oracleBoost);
+    if (Number(player.stats.oracleBattleBoost || 0) > 0) player.stats.oracleBattleBoost -= 1;
+    if (Number(player.stats.oracleZodiacBoost || 0) > 0) player.stats.oracleZodiacBoost -= 1;
     player.coins += marks;
     player.score += score;
     player.lines += lines;
     player.stats.trials = Number(player.stats.trials || 0) + 1;
+    await addPactContribution(player, marks);
+    if (dbReady) {
+      await db.query("INSERT INTO v2_trial_records (id, user_id, day_key, score, lines_cleared, duration_sec, mode, marks_earned) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
+        crypto.randomUUID(),
+        player.id,
+        state.v2.dayKey,
+        score,
+        lines,
+        duration,
+        mode,
+        marks
+      ]);
+    }
     await saveDbPlayer(player);
     pushMessage("方块试炼", `${player.name} 刻下 ${marks} 道钟痕（${cycle.rulingZodiac}日加成）`, "system", "全城广播");
     return sendJson(res, { success: true, data: { player, marksEarned: marks, cycle } });
@@ -1397,9 +1684,17 @@ async function api(req, res) {
     if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
     const upgrade = upgradeTreeFor(player).find((item) => item.category === body.category);
     if (!upgrade) return sendJson(res, { success: false, error: "升级项不存在" }, 400);
+    if (upgrade.level >= (upgrade.category === "train" ? 3 : 5)) return sendJson(res, { success: false, error: "该铭刻已到上限" }, 400);
     if (player.coins < upgrade.nextCost) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
     player.coins -= upgrade.nextCost;
     player.stats[`engrave_${upgrade.category}`] = Number(player.stats[`engrave_${upgrade.category}`] || 0) + 1;
+    if (upgrade.category === "shield") player.shields = Math.min(1 + upgradeLevel(player, "shield"), Number(player.shields || 0) + 1);
+    if (dbReady) {
+      await db.query(`
+        INSERT INTO v2_player_upgrades (user_id, category, level) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE level=VALUES(level)
+      `, [player.id, upgrade.category, player.stats[`engrave_${upgrade.category}`]]);
+    }
     await saveDbPlayer(player);
     pushMessage("铭刻之书", `${player.name} 升级了「${upgrade.name}」`, "system", "全城广播");
     return sendJson(res, { success: true, data: { player, upgrades: upgradeTreeFor(player) } });
@@ -1452,8 +1747,12 @@ async function api(req, res) {
     if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
     const position = (player.positions || []).find((item) => String(item.id) === String(body.positionId));
     if (!position || position.type !== "fog") return sendJson(res, { success: false, error: "持仓不存在" }, 404);
+    if (beijingDateKey(position.created_at || position.createdAt || Date.now()) === beijingDateKey()) {
+      return sendJson(res, { success: false, error: "雾区 T+1：今日买入的商品需等午夜列车后才能卖出" }, 400);
+    }
     const goods = state.v2.fogGoods.find((item) => item.id === position.code);
-    const income = Math.round((goods?.currentPrice || Number(position.entry || 0)) * Number(position.qty || 1) * 0.98);
+    const feeRate = Math.max(0.01, (5 - upgradeLevel(player, "fee")) / 100);
+    const income = Math.round((goods?.currentPrice || Number(position.entry || 0)) * Number(position.qty || 1) * (1 - feeRate));
     player.coins += income;
     if (dbReady) await db.query("DELETE FROM user_positions WHERE id = ? AND user_id = ?", [position.id, player.userId]);
     await saveDbPlayer(player);
@@ -1493,6 +1792,7 @@ async function api(req, res) {
     };
     state.v2.pacts.unshift(pact);
     player.stats.guildActions = Number(player.stats.guildActions || 0) + 1;
+    await persistPact(pact);
     await saveDbPlayer(player);
     pushMessage("契约广场", `${player.name} 创建试炼契约「${pact.name}」`, "system", "全城广播");
     return sendJson(res, { success: true, data: pact });
@@ -1508,6 +1808,7 @@ async function api(req, res) {
     pact.members.push({ userId: player.id, name: player.name, contribution: 0, joinedAt: new Date().toISOString() });
     pact.openSlots = Math.max(0, 3 - pact.members.length);
     player.stats.guildActions = Number(player.stats.guildActions || 0) + 1;
+    await persistPact(pact);
     await saveDbPlayer(player);
     pushMessage("契约广场", `${player.name} 加入试炼契约「${pact.name}」`, "system", "全城广播");
     return sendJson(res, { success: true, data: pact });
@@ -1520,6 +1821,8 @@ async function api(req, res) {
     if (!pact) return sendJson(res, { success: false, error: "契约不存在" }, 404);
     pact.members = pact.members.filter((member) => member.userId !== player.id);
     pact.openSlots = Math.max(0, 3 - pact.members.length);
+    if (dbReady) await db.query("DELETE FROM v2_pact_members WHERE pact_id=? AND user_id=?", [pact.id, player.id]);
+    await persistPact(pact);
     return sendJson(res, { success: true, data: pact });
   }
   if (url.pathname === "/api/oracle/cards") {
@@ -1532,11 +1835,15 @@ async function api(req, res) {
     if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
     const card = state.v2.oracleCards.find((item) => item.id === body.cardId && !item.purchased);
     if (!card) return sendJson(res, { success: false, error: "情报不存在或已售出" }, 404);
-    if (player.coins < card.cost) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
-    player.coins -= card.cost;
+    const effectiveCost = Math.max(1, Math.round(card.cost * (1 - upgradeLevel(player, "oracle") * 0.05)));
+    if (player.coins < effectiveCost) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
+    player.coins -= effectiveCost;
     player.stats.oracle = Number(player.stats.oracle || 0) + 1;
     card.purchased = true;
     card.purchasedBy = player.id;
+    await applyOracleEffect(player, card);
+    await persistOracleCard(card);
+    if (dbReady) await db.query("INSERT IGNORE INTO v2_oracle_purchases (user_id, card_id, effect_type) VALUES (?, ?, ?)", [player.id, card.id, card.effect?.type || "unknown"]);
     await saveDbPlayer(player);
     pushMessage("规则之眼", `${player.name} 买走情报「${card.title}」`, "system", "全城广播");
     return sendJson(res, { success: true, data: { card, player } });
@@ -1556,6 +1863,10 @@ async function api(req, res) {
     const body = await readBody(req);
     const player = await currentPlayer(req, body);
     if (!player) return sendJson(res, { success: false, error: "请先登录" }, 401);
+    const now = Date.now();
+    const last = broadcastRate.get(player.id) || 0;
+    if (now - last < 1000) return sendJson(res, { success: false, error: "说话太快，钟声还没落下" }, 429);
+    broadcastRate.set(player.id, now);
     const channel = String(body.channel || "钟城广场").slice(0, 16);
     pushMessage(player.name, String(body.content || "").slice(0, 160), "player", channel);
     player.stats.chat = Number(player.stats.chat || 0) + 1;
@@ -1748,14 +2059,63 @@ async function admin(req, res) {
   serveFile(req, res, "admin.html");
 }
 
+function initWebSocket(server) {
+  wsServer = new WebSocket.Server({ server, path: "/ws" });
+  wsServer.on("connection", async (socket, req) => {
+    sockets.add(socket);
+    const url = new URL(req.url, "http://localhost");
+    const token = url.searchParams.get("token") || "";
+    const player = token ? await getUserByToken(token) : null;
+    socket.player = player;
+    socket.send(JSON.stringify({
+      type: "init",
+      payload: {
+        state: player ? snapshotForPlayer(player) : guestSnapshot(),
+        authenticated: Boolean(player)
+      },
+      at: new Date().toISOString()
+    }));
+    socket.on("message", async (raw) => {
+      let message = {};
+      try {
+        message = JSON.parse(raw.toString());
+      } catch {
+        socket.send(JSON.stringify({ type: "error", payload: "bad_json" }));
+        return;
+      }
+      if (message.type === "ping") {
+        socket.send(JSON.stringify({ type: "pong", payload: {}, at: new Date().toISOString() }));
+        return;
+      }
+      if (message.type === "chat") {
+        if (!socket.player) {
+          socket.send(JSON.stringify({ type: "error", payload: "auth_required" }));
+          return;
+        }
+        const now = Date.now();
+        const last = broadcastRate.get(socket.player.id) || 0;
+        if (now - last < 1000) {
+          socket.send(JSON.stringify({ type: "error", payload: "rate_limited" }));
+          return;
+        }
+        broadcastRate.set(socket.player.id, now);
+        pushMessage(socket.player.name, String(message.payload?.content || "").slice(0, 160), "player", String(message.payload?.channel || "钟城广场").slice(0, 16));
+      }
+    });
+    socket.on("close", () => sockets.delete(socket));
+  });
+}
+
 loadPersistedState();
 connectMysql();
 refreshExternalData();
 
-http.createServer((req, res) => {
+const playerServer = http.createServer((req, res) => {
   if (req.url.startsWith("/api/")) return api(req, res);
   serveFile(req, res, "index.html");
-}).listen(playerPort, () => {
+});
+initWebSocket(playerServer);
+playerServer.listen(playerPort, () => {
   console.log(`Player app listening on ${playerPort}`);
 });
 
