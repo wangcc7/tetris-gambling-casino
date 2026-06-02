@@ -1745,13 +1745,20 @@ function drawTrial(now = performance.now(), delta = 16) {
   const canvas = $("#trialBoard");
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
-  const cssWidth = trial.cols * trial.cell;
-  const cssHeight = trial.rows * trial.cell;
+  let cssWidth = trial.cols * trial.cell;
+  let cssHeight = trial.rows * trial.cell;
   if (canvas.width !== cssWidth * dpr || canvas.height !== cssHeight * dpr) {
+    const rect = canvas.getBoundingClientRect();
+    const renderW = Math.round(rect.width);
+    if (renderW > 0) {
+      trial.cell = Math.max(12, Math.min(40, Math.floor(renderW / trial.cols)));
+      cssWidth = trial.cols * trial.cell;
+      cssHeight = trial.rows * trial.cell;
+    }
     canvas.width = cssWidth * dpr;
     canvas.height = cssHeight * dpr;
-    canvas.style.width = `${cssWidth}px`;
-    canvas.style.height = `${cssHeight}px`;
+    canvas.style.width = "100%";
+    canvas.style.height = cssHeight + "px";
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const shakeActive = now < trial.effects.shakeUntil;
