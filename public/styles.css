@@ -13,6 +13,7 @@
 }
 
 /* ===== V2 SPA: 终焉钟城 · 三面板框架 ===== */
+/* 修复：移除无前缀 body 选择器，防止与 .v2-body 冲突 */
 .v2-body {
   --color-bg-primary: #0d0d0d;
   --color-bg-secondary: #1a1a1c;
@@ -27,6 +28,7 @@
   --color-info: #5b7b9a;
   --color-mystic: #6b3fa0;
   min-height: 100vh;
+  margin: 0;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% -10%, rgba(184, 134, 11, .14), transparent 34%),
@@ -785,57 +787,6 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: radial-gradient(circle at top left, #293241 0, #111318 42%, #0b0c10 100%);
-  color: var(--text);
-  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Helvetica Neue", Arial, sans-serif;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 78% 18%, transparent 0 74px, rgba(242, 193, 78, .13) 75px 77px, transparent 78px),
-    repeating-conic-gradient(from 8deg at 78% 18%, rgba(255,255,255,.08) 0deg 2deg, transparent 2deg 12deg),
-    linear-gradient(115deg, transparent 0 42%, rgba(53, 215, 232, .08) 45%, transparent 48%),
-    linear-gradient(65deg, transparent 0 56%, rgba(242, 193, 78, .07) 58%, transparent 62%);
-  animation: market-scan 9s linear infinite;
-  z-index: -1;
-}
-
-body::after {
-  content: "";
-  position: fixed;
-  right: 8vw;
-  top: 90px;
-  width: 190px;
-  height: 190px;
-  pointer-events: none;
-  border: 1px solid rgba(242, 193, 78, .16);
-  border-radius: 50%;
-  background:
-    linear-gradient(90deg, transparent 49%, rgba(242, 193, 78, .22) 50%, transparent 51%),
-    linear-gradient(0deg, transparent 49%, rgba(53, 215, 232, .18) 50%, transparent 51%);
-  opacity: .38;
-  animation: clock-hand 18s linear infinite;
-  z-index: -1;
-}
-
-@keyframes market-scan {
-  0% { transform: translateX(-12%) translateY(-4%); opacity: .4; }
-  50% { opacity: .9; }
-  100% { transform: translateX(12%) translateY(4%); opacity: .4; }
-}
-
-@keyframes clock-hand {
-  to { transform: rotate(360deg); }
-}
 
 @keyframes train-highlight {
   0% { transform: translateX(0); box-shadow: none; }
@@ -843,7 +794,7 @@ body::after {
   100% { transform: translateX(0); }
 }
 
-body.train-pulse::before {
+.v2-body.train-pulse::before {
   display: block;
   animation-duration: 2s;
   opacity: .95;
@@ -2088,77 +2039,8 @@ h2 {
   display: none;
 }
 
-@media (max-width: 1080px) {
-  .game-header {
-    grid-template-columns: 1fr;
-  }
 
-  .system-dock {
-    grid-template-columns: 1fr auto;
-    min-width: 0;
-  }
 
-  .system-dock small {
-    grid-column: 1 / -1;
-  }
-
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .market-zone,
-  .lobby-grid,
-  .two-col,
-  .game-page,
-  .chat-layout,
-  .rank-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .chat-panel {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 760px) {
-  .app-shell,
-  .admin-shell {
-    padding: 10px;
-  }
-
-  .play-layout,
-  .topbar,
-  .market-zone,
-  .admin-grid,
-  .lobby-grid,
-  .two-col,
-  .game-page,
-  .chat-layout,
-  .rank-grid,
-  .kpi-row,
-  .time-grid,
-  .inline-form,
-  .trade-desk,
-  .stat-grid.wide {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-band {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .player-card,
-  .actions {
-    grid-template-columns: 1fr;
-    display: grid;
-    width: 100%;
-  }
-
-  .admin-snapshot {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* ===== V5 新增视觉增强 ===== */
 
@@ -2270,11 +2152,11 @@ h2 {
 }
 
 /* 终焉之日（第10天）特效 */
-body.finale-day .v2-header {
+.v2-body.finale-day .v2-header {
   background: linear-gradient(135deg, #1a0a0a 0%, #2d1515 50%, #1a0a0a 100%);
   animation: finale-header-pulse 3s ease-in-out infinite;
 }
-body.finale-day .trial-board-shell {
+.v2-body.finale-day .trial-board-shell {
   box-shadow: 0 0 30px rgba(220, 40, 40, .35), 0 0 60px rgba(220, 40, 40, .15);
   animation: finale-glow 2s ease-in-out infinite alternate;
 }

@@ -215,7 +215,7 @@ function speakLine(text) {
     utterance.lang = "zh-CN";
     utterance.rate = 0.82;
     utterance.pitch = 0.68;
-    utterance.volume = 0.35;
+    utterance.volume = 0.2;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   } catch {
@@ -441,39 +441,39 @@ function startBgm() {
     bgm.step += 1;
 
     // 钟楼低频嗡鸣（持续压迫感）
-    if (bgm.tick % 16 === 0) playLayer(41, beatLen * 4.5, "sine", 0.21, 0, 0);
+    if (bgm.tick % 16 === 0) playLayer(41, beatLen * 4.5, "sine", 0.63, 0, 0);
 
     // 秒针走动（白噪声滤波模拟齿轮咬合）
     if (bgm.tick % 4 === 0) {
-      noise(0.04, 0.11 + danger * 0.12);
+      noise(0.04, 0.33 + danger * 0.36);
     }
 
     // 主旋律——钟声交响（多音色层叠）
     const bellSeq = [392, 330, 440, 294, 523, 440, 392, 330, 392, 523, 587, 440, 330, 392, 294, 262];
     const bellIndex = bgm.step % bellSeq.length;
     if (bgm.tick % 8 === 0) {
-      playLayer(bellSeq[bellIndex] * (1 + danger * 0.1), beatLen * 1.2, "triangle", 0.36 + danger * 0.06, 0.03, -0.2);
-      playLayer(bellSeq[(bellIndex + 4) % bellSeq.length] * 0.5, beatLen * 1.8, "sine", 0.21, beatLen * 0.2, 0.3);
+      playLayer(bellSeq[bellIndex] * (1 + danger * 0.1), beatLen * 1.2, "triangle", 1.08 + danger * 0.18, 0.03, -0.2);
+      playLayer(bellSeq[(bellIndex + 4) % bellSeq.length] * 0.5, beatLen * 1.8, "sine", 0.63, beatLen * 0.2, 0.3);
     }
 
     // 和声层（每4小节一个变化）
     const chordRoot = [196, 220, 247, 262, 294, 330, 349, 392][bgm.step % 8];
     if (bgm.tick % 32 === 0) {
-      playLayer(chordRoot, beatLen * 4, "sine", 0.15, 0, 0);
-      playLayer(chordRoot * 1.5, beatLen * 3.8, "triangle", 0.11, beatLen * 0.5, -0.4);
+      playLayer(chordRoot, beatLen * 4, "sine", 0.45, 0, 0);
+      playLayer(chordRoot * 1.5, beatLen * 3.8, "triangle", 0.33, beatLen * 0.5, -0.4);
     }
 
     // 神兽日变奏
     if (currentBeast() === "白虎" && bgm.tick % 24 === 0) {
-      playLayer(587, beatLen * 0.8, "sawtooth", 0.24, 0, 0);
+      playLayer(587, beatLen * 0.8, "sawtooth", 0.72, 0, 0);
     }
     if (currentBeast() === "朱雀" && bgm.tick % 20 === 0) {
-      playLayer(784, beatLen * 0.6, "triangle", 0.27, 0, 0.4);
+      playLayer(784, beatLen * 0.6, "triangle", 0.81, 0, 0.4);
     }
 
     // 堆高加速提示（方块堆到危险区加入低频心跳）
     if (danger >= 0.75 && bgm.tick % 2 === 0) {
-      playLayer(55 + danger * 20, beatLen * 0.35, "sine", 0.36, 0, 0);
+      playLayer(55 + danger * 20, beatLen * 0.35, "sine", 1.08, 0, 0);
     }
   };
 
