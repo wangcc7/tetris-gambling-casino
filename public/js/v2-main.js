@@ -1745,21 +1745,16 @@ function drawTrial(now = performance.now(), delta = 16) {
   const canvas = $("#trialBoard");
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
-  let cssWidth = trial.cols * trial.cell;
-  let cssHeight = trial.rows * trial.cell;
-  if (canvas.width !== cssWidth * dpr || canvas.height !== cssHeight * dpr) {
-    const rect = canvas.getBoundingClientRect();
-    const renderW = Math.round(rect.width);
-    if (renderW > 0) {
-      trial.cell = Math.max(12, Math.min(40, Math.floor(renderW / trial.cols)));
-      cssWidth = trial.cols * trial.cell;
-      cssHeight = trial.rows * trial.cell;
-    }
-    canvas.width = cssWidth * dpr;
-    canvas.height = cssHeight * dpr;
-    canvas.style.width = "100%";
-    canvas.style.height = cssHeight + "px";
+  const rect = canvas.getBoundingClientRect();
+  const renderW = Math.max(200, Math.round(rect.width));
+  if (renderW > 0) {
+    trial.cell = Math.max(18, Math.min(36, Math.floor(renderW / trial.cols)));
   }
+  const cssWidth = trial.cols * trial.cell;
+  const cssHeight = trial.rows * trial.cell;
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  // 让 CSS 控制显示尺寸，不覆盖 style
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const shakeActive = now < trial.effects.shakeUntil;
   const shakeX = shakeActive ? (Math.random() - 0.5) * trial.effects.shakePower * 2 : 0;
