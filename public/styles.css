@@ -33,7 +33,10 @@
     repeating-conic-gradient(from 0deg at 88% 16%, rgba(197, 165, 90, .08) 0deg 3deg, transparent 3deg 12deg),
     linear-gradient(135deg, #0d0d0d, #151312 48%, #090909);
   color: var(--color-text-primary);
-  font-family: "Noto Serif SC", "STSong", "PingFang SC", serif;
+  font-family: "Noto Serif SC", "STSong", "SimSun", "PingFang SC", "Microsoft YaHei", serif;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
 }
 
 .v2-body::before,
@@ -787,7 +790,9 @@ body {
   min-height: 100vh;
   background: radial-gradient(circle at top left, #293241 0, #111318 42%, #0b0c10 100%);
   color: var(--text);
-  font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 body::before {
@@ -2292,4 +2297,186 @@ body.finale-day .trial-board-shell {
 @keyframes finale-blink {
   0%, 100% { opacity: .7; }
   50% { opacity: 1; }
+}
+
+/* ===== 列车系统 ===== */
+
+/* 列车进站全屏动画 */
+.train-arrival-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.train-arrival-overlay.active {
+  opacity: 1;
+  animation: train-arrive 4s ease-out forwards;
+}
+@keyframes train-arrive {
+  0%   { background: radial-gradient(circle at 85% 50%, rgba(197,165,90,.35) 0%, transparent 40%); }
+  15%  { background: radial-gradient(circle at 50% 45%, rgba(197,165,90,.4) 0%, transparent 35%); }
+  30%  { background: radial-gradient(circle at 15% 40%, rgba(197,165,90,.28) 0%, transparent 30%); }
+  100% { background: transparent; }
+}
+
+/* 列车灯光扫过 */
+.train-light-sweep {
+  position: fixed;
+  top: 50%;
+  left: -120%;
+  width: 220%;
+  height: 6px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,245,194,.6) 40%, rgba(255,245,194,.9) 50%, rgba(255,245,194,.6) 60%, transparent 100%);
+  filter: blur(3px);
+  pointer-events: none;
+  z-index: 9998;
+  animation: train-sweep 3s ease-in-out forwards;
+}
+@keyframes train-sweep {
+  0%   { transform: translateX(0); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 0.5; }
+  100% { transform: translateX(180%); opacity: 0; }
+}
+
+/* 列车到站汽笛脉冲 */
+.train-whistle-pulse {
+  animation: whistle-pulse 0.5s ease-out;
+}
+@keyframes whistle-pulse {
+  0%   { filter: brightness(1.4) saturate(1.3); transform: scale(1.01); }
+  100% { filter: brightness(1) saturate(1); transform: scale(1); }
+}
+
+/* 站台氛围粒子 */
+.station-haze {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99;
+  background:
+    radial-gradient(ellipse at 85% 55%, rgba(197,165,90,.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 15% 60%, rgba(197,165,90,.04) 0%, transparent 40%);
+  opacity: 0;
+  transition: opacity 1.5s;
+}
+.station-haze.active { opacity: 1; }
+
+/* 列车倒计时 */
+.train-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(184,134,11,.12);
+  border: 1px solid rgba(184,134,11,.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-accent-brass);
+}
+.train-countdown .cd-number {
+  color: var(--color-accent-gold);
+  font-size: 14px;
+  min-width: 36px;
+  text-align: center;
+}
+
+/* 列车日志面板 */
+.train-log {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(197,165,90,.12);
+  border-radius: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.train-log .log-entry {
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(197,165,90,.06);
+  color: var(--muted);
+}
+.train-log .log-entry .log-time {
+  color: var(--color-accent-copper);
+  margin-right: 6px;
+}
+.train-log .log-entry .log-train {
+  color: var(--color-accent-gold);
+  font-weight: 600;
+}
+
+/* 五班列车指示器 */
+.train-indicators {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.train-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(139,115,85,.3);
+  transition: all 0.5s;
+}
+.train-dot.arrived { background: var(--color-accent-copper); }
+.train-dot.current { background: var(--color-accent-gold); box-shadow: 0 0 8px var(--color-accent-gold); animation: dot-pulse 1.5s ease-in-out infinite; }
+.train-dot.pending { background: rgba(139,115,85,.15); }
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 4px var(--color-accent-gold); }
+  50% { box-shadow: 0 0 12px var(--color-accent-gold), 0 0 20px rgba(184,134,11,.4); }
+}
+
+/* ===== 特效增强 ===== */
+
+/* 情报购买金光 */
+.oracle-bought-glow {
+  animation: oracle-glow 1.5s ease-out;
+}
+@keyframes oracle-glow {
+  0%   { box-shadow: 0 0 20px rgba(107,63,160,.6), 0 0 40px rgba(107,63,160,.3); }
+  100% { box-shadow: 0 0 0px rgba(107,63,160,0); }
+}
+
+/* 雾区交易成功波纹 */
+.fog-trade-ripple {
+  animation: trade-ripple 0.8s ease-out;
+}
+@keyframes trade-ripple {
+  0%   { filter: brightness(1.3); box-shadow: 0 0 15px rgba(74,124,111,.5); }
+  100% { filter: brightness(1); box-shadow: 0 0 0px rgba(74,124,111,0); }
+}
+
+/* 登录/注册 dialog 增强 */
+.auth-dialog {
+  border: 1px solid var(--color-accent-copper) !important;
+  background: linear-gradient(160deg, #1a1a1c, #141416) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 0 40px rgba(184,134,11,.15), 0 8px 32px rgba(0,0,0,.5) !important;
+}
+.auth-dialog h2 {
+  color: var(--color-accent-gold) !important;
+  text-align: center;
+  font-family: "Noto Serif SC", serif;
+}
+.auth-dialog input {
+  background: rgba(0,0,0,.35) !important;
+  border: 1px solid rgba(139,115,85,.3) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: 6px !important;
+}
+.auth-dialog input:focus {
+  border-color: var(--color-accent-gold) !important;
+  box-shadow: 0 0 8px rgba(184,134,11,.2) !important;
+}
+
+/* 全局字体统一 */
+h1, h2, h3, .rule-label, .broadcast-log b {
+  font-family: "Noto Serif SC", "STSong", "SimSun", serif;
+}
+input, button, select, textarea, .muted-text, small {
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 }

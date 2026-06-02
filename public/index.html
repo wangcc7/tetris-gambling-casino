@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body class="v2-body">
+    <div id="trainOverlay" class="train-arrival-overlay"></div>
+    <div id="stationHaze" class="station-haze"></div>
     <div id="app" class="v2-app">
       <header class="v2-header">
         <button id="centerToggle" class="icon-btn" type="button">≡</button>
@@ -102,8 +104,19 @@
       </aside>
 
       <footer class="v2-footer">
-        <div id="trainRail" class="train-rail">下一班列车：同步中...</div>
+        <div id="trainRail" class="train-rail">
+          <span>下一班列车：同步中...</span>
+          <span id="trainCountdown" class="train-countdown" style="display:none"></span>
+        </div>
+        <div class="train-indicators" id="trainIndicators">
+          <span class="train-dot pending" data-train="0" title="晨钟列车"></span>
+          <span class="train-dot pending" data-train="1" title="正午列车"></span>
+          <span class="train-dot pending" data-train="2" title="黄昏列车"></span>
+          <span class="train-dot pending" data-train="3" title="午夜列车"></span>
+          <span class="train-dot pending" data-train="4" title="终焉列车"></span>
+        </div>
         <div id="railBroadcast">钟楼仍在校准。</div>
+        <div id="trainLog" class="train-log" style="display:none"></div>
         <div id="rulePanel" class="rule-panel">
           <div class="rule-row"><span class="rule-label">今日生肖</span><span id="ruleZodiac">--</span></div>
           <div class="rule-row"><span class="rule-label">神兽降临</span><span id="ruleBeast">--</span></div>

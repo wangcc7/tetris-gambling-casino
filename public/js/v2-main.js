@@ -118,7 +118,10 @@ const trial = {
     clears: [],
     shakeUntil: 0,
     shakePower: 0,
-    flashUntil: 0
+    flashUntil: 0,
+    sparkles: [],
+    pulsing: false,
+    pulseUntil: 0
   }
 };
 
@@ -154,6 +157,10 @@ function getSession() {
 
 function setSession(session) {
   localStorage.setItem(sessionKey, JSON.stringify(session));
+}
+
+function isGuest() {
+  return !state || !state.identity || state.identity.mode === "guest";
 }
 
 function loadPathState() {
@@ -206,8 +213,9 @@ function speakLine(text) {
   try {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "zh-CN";
-    utterance.rate = 0.88;
-    utterance.pitch = 0.72;
+    utterance.rate = 0.82;
+    utterance.pitch = 0.68;
+    utterance.volume = 0.35;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   } catch {
@@ -433,39 +441,39 @@ function startBgm() {
     bgm.step += 1;
 
     // 钟楼低频嗡鸣（持续压迫感）
-    if (bgm.tick % 16 === 0) playLayer(41, beatLen * 4.5, "sine", 0.07, 0, 0);
+    if (bgm.tick % 16 === 0) playLayer(41, beatLen * 4.5, "sine", 0.21, 0, 0);
 
     // 秒针走动（白噪声滤波模拟齿轮咬合）
     if (bgm.tick % 4 === 0) {
-      noise(0.04, 0.035 + danger * 0.04);
+      noise(0.04, 0.11 + danger * 0.12);
     }
 
     // 主旋律——钟声交响（多音色层叠）
     const bellSeq = [392, 330, 440, 294, 523, 440, 392, 330, 392, 523, 587, 440, 330, 392, 294, 262];
     const bellIndex = bgm.step % bellSeq.length;
     if (bgm.tick % 8 === 0) {
-      playLayer(bellSeq[bellIndex] * (1 + danger * 0.1), beatLen * 1.2, "triangle", 0.12 + danger * 0.02, 0.03, -0.2);
-      playLayer(bellSeq[(bellIndex + 4) % bellSeq.length] * 0.5, beatLen * 1.8, "sine", 0.07, beatLen * 0.2, 0.3);
+      playLayer(bellSeq[bellIndex] * (1 + danger * 0.1), beatLen * 1.2, "triangle", 0.36 + danger * 0.06, 0.03, -0.2);
+      playLayer(bellSeq[(bellIndex + 4) % bellSeq.length] * 0.5, beatLen * 1.8, "sine", 0.21, beatLen * 0.2, 0.3);
     }
 
     // 和声层（每4小节一个变化）
     const chordRoot = [196, 220, 247, 262, 294, 330, 349, 392][bgm.step % 8];
     if (bgm.tick % 32 === 0) {
-      playLayer(chordRoot, beatLen * 4, "sine", 0.05, 0, 0);
-      playLayer(chordRoot * 1.5, beatLen * 3.8, "triangle", 0.038, beatLen * 0.5, -0.4);
+      playLayer(chordRoot, beatLen * 4, "sine", 0.15, 0, 0);
+      playLayer(chordRoot * 1.5, beatLen * 3.8, "triangle", 0.11, beatLen * 0.5, -0.4);
     }
 
     // 神兽日变奏
     if (currentBeast() === "白虎" && bgm.tick % 24 === 0) {
-      playLayer(587, beatLen * 0.8, "sawtooth", 0.08, 0, 0);
+      playLayer(587, beatLen * 0.8, "sawtooth", 0.24, 0, 0);
     }
     if (currentBeast() === "朱雀" && bgm.tick % 20 === 0) {
-      playLayer(784, beatLen * 0.6, "triangle", 0.09, 0, 0.4);
+      playLayer(784, beatLen * 0.6, "triangle", 0.27, 0, 0.4);
     }
 
     // 堆高加速提示（方块堆到危险区加入低频心跳）
     if (danger >= 0.75 && bgm.tick % 2 === 0) {
-      playLayer(55 + danger * 20, beatLen * 0.35, "sine", 0.12, 0, 0);
+      playLayer(55 + danger * 20, beatLen * 0.35, "sine", 0.36, 0, 0);
     }
   };
 
@@ -499,6 +507,12 @@ async function load() {
   clockSyncedAt = Date.now();
   renderAll();
   connectWS();
+  // 宾客玩家自动弹出登录窗
+  if (isGuest() && !session._guestPrompted) {
+    session._guestPrompted = true;
+    setSession(session);
+    setTimeout(() => { toast("请先登录进入终焉钟城"); $("#authDialog").showModal(); }, 1200);
+  }
 }
 
 function connectWS() {
@@ -555,19 +569,44 @@ function connectWS() {
 function handleTrainEvent(payload) {
   const title = payload.title || payload.author || "终焉列车";
   const text = payload.text || "";
-  // 解析列车信息用于大字展示
   const cycleMatch = text.match(/第(\d+)天\s*·\s*(\S+)·(\S+)/);
   const dayInfo = cycleMatch ? `第${cycleMatch[1]}天 · ${cycleMatch[2]}·${cycleMatch[3]}` : "";
+
+  // 全屏列车进站动画
+  const overlay = document.getElementById("trainOverlay");
+  if (overlay) {
+    overlay.classList.remove("active");
+    void overlay.offsetWidth;
+    overlay.classList.add("active");
+    setTimeout(() => overlay.classList.remove("active"), 4000);
+  }
+  // 灯光扫过
+  const sweep = document.createElement("div");
+  sweep.className = "train-light-sweep";
+  document.body.appendChild(sweep);
+  setTimeout(() => sweep.remove(), 3000);
+  // 站台雾氛
+  const haze = document.getElementById("stationHaze");
+  if (haze) { haze.classList.add("active"); setTimeout(() => haze.classList.remove("active"), 4000); }
+
+  // 大字播报 + 汽笛音效
   showCenterLine(`${title} 到站${dayInfo ? " — " + dayInfo : ""}`, "train");
   playSfx("train");
-  document.body.classList.add("train-pulse");
-  setTimeout(() => document.body.classList.remove("train-pulse"), 3200);
-  // 更新顶栏规则显示
+  document.body.classList.add("train-whistle-pulse");
+  setTimeout(() => document.body.classList.remove("train-whistle-pulse"), 500);
+
+  // 列车日志
+  addTrainLog(title, text);
+
+  // 更新顶栏规则
   if (payload.cycle) {
     $("#cycleTitle").textContent = `第${payload.cycle.day}天 · ${payload.cycle.zodiac}·${payload.cycle.code}`;
     if (payload.cycle.beast) $("#zodiacEffect").textContent = `${payload.cycle.beast}降临 · ${payload.cycle.zodiac}日规则已激活`;
     setTimeout(updateRulePanel, 100);
   }
+  // 更新列车指示器
+  updateTrainIndicators();
+
   if (title.includes("正午") || text.includes("雾区")) {
     $$(".fog-card").forEach((card) => {
       card.classList.remove("train-highlight");
@@ -585,11 +624,50 @@ function handleTrainEvent(payload) {
   if (title.includes("午夜")) {
     document.body.classList.add("night-wave");
     setTimeout(() => document.body.classList.remove("night-wave"), 5000);
+    const fogCards = $$(".fog-card");
+    fogCards.forEach((card, i) => {
+      setTimeout(() => {
+        card.classList.remove("fog-trade-ripple");
+        void card.offsetWidth;
+        card.classList.add("fog-trade-ripple");
+      }, i * 100);
+    });
   }
   if (title.includes("终焉")) {
     document.body.classList.add("finale-flash");
     setTimeout(() => document.body.classList.remove("finale-flash"), 5000);
   }
+}
+
+const trainLogEntries = [];
+function addTrainLog(name, text) {
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  trainLogEntries.unshift({ time, name, text });
+  if (trainLogEntries.length > 20) trainLogEntries.length = 20;
+  const logEl = document.getElementById("trainLog");
+  if (logEl) {
+    logEl.style.display = "block";
+    logEl.innerHTML = trainLogEntries.slice(0, 10).map(e =>
+      `<div class="log-entry"><span class="log-time">${e.time}</span><span class="log-train">${e.name}</span> ${escapeHtml(e.text.slice(0, 60))}</div>`
+    ).join("");
+  }
+}
+
+function updateTrainIndicators() {
+  if (!state || !state.v2.trains) return;
+  const dots = $$("#trainIndicators .train-dot");
+  if (!dots.length) return;
+  const trains = state.v2.trains;
+  dots.forEach((dot, i) => {
+    dot.classList.remove("arrived", "current", "pending");
+    if (i < trains.length && trains[i].passed) dot.classList.add("arrived");
+    else if (i < trains.length && !trains[i].passed) {
+      dot.classList.add("current");
+      // 只标记第一个未到达的
+      for (let j = i + 1; j < dots.length; j++) dots[j].classList.add("pending");
+    }
+  });
 }
 
 function renderAll() {
@@ -608,7 +686,20 @@ function renderAll() {
   $("#authBtn").textContent = state.identity?.username ? `账号 · ${state.identity.username}` : "登录 / 注册";
   $("#identityNo").textContent = `试炼者编号：${escapeHtml(state.identity?.identityNo || "--")}`;
   const nextTrain = state.v2.trains.find((train) => !train.passed) || state.v2.trains[0];
-  $("#trainRail").textContent = `下一班列车：${nextTrain.name} ${nextTrain.time} | ${nextTrain.effect}`;
+  const trainRail = $("#trainRail");
+  if (trainRail) {
+    const spanEl = trainRail.querySelector("span") || trainRail;
+    spanEl.textContent = `下一班列车：${nextTrain.name} ${nextTrain.time} | ${nextTrain.effect}`;
+    // 倒计时
+    const atTime = nextTrain.at ? new Date(nextTrain.at).getTime() : null;
+    const cdEl = document.getElementById("trainCountdown");
+    if (cdEl && atTime) {
+      cdEl.style.display = "inline-flex";
+      const remain = Math.max(0, atTime - currentServerTime());
+      cdEl.innerHTML = `<span class="cd-number">${formatTime(remain)}</span>`;
+    }
+  }
+  updateTrainIndicators();
   $("#railBroadcast").textContent = state.messages[0] ? `${state.messages[0].author}：${state.messages[0].text}` : "钟楼仍在校准。";
   const weather = state.external?.weather;
   $("#systemMeta").textContent = `版本 ${state.version || "--"} · ${weather?.city || "济南"} ${weather?.text || "--"} ${weather?.temperature || ""}`.trim();
@@ -648,6 +739,15 @@ function tickClock() {
   const time = currentServerTime();
   $("#serverClock").textContent = new Date(time).toLocaleString("zh-CN", { hour12: false });
   $("#dayRemain").textContent = `剩余 ${formatTime(new Date(state.v2.cycle.dayEndsAt).getTime() - time)}`;
+  // 刷新列车倒计时
+  const nextTrain = state.v2.trains.find((train) => !train.passed) || state.v2.trains[0];
+  if (nextTrain && nextTrain.at) {
+    const cdEl = document.getElementById("trainCountdown");
+    if (cdEl && cdEl.style.display !== "none") {
+      const remain = Math.max(0, new Date(nextTrain.at).getTime() - time);
+      cdEl.innerHTML = `<span class="cd-number">${formatTime(remain)}</span>`;
+    }
+  }
 }
 
 function renderChronicle() {
@@ -733,6 +833,7 @@ function renderBroadcast() {
   `).join("");
   $("#broadcastForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (isGuest()) { toast("请先登录再发送广播"); $("#authDialog").showModal(); return; }
     try {
       await post("/api/broadcast/send", { channel: $("#broadcastChannel").value, content: $("#broadcastInput").value });
       $("#broadcastInput").value = "";
@@ -770,9 +871,12 @@ function renderFog() {
     `).join("")}</div>
   `;
   $$("[data-buy]").forEach((button) => button.addEventListener("click", async () => {
+    if (isGuest()) { toast("请先登录再进行雾区交易"); $("#authDialog").showModal(); return; }
     try {
       await post("/api/fog/buy", { goodsId: button.dataset.buy, quantity: 1 });
       toast("雾区成交，列车已经记录这笔可能");
+      const card = button.closest(".fog-card");
+      if (card) { card.classList.add("fog-trade-ripple"); setTimeout(() => card.classList.remove("fog-trade-ripple"), 800); }
       await load();
     } catch (error) {
       toast(error.message);
@@ -798,6 +902,7 @@ function renderPact() {
   `;
   $("#pactCreate").addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (isGuest()) { toast("请先登录再创建契约"); $("#authDialog").showModal(); return; }
     try {
       await post("/api/pact/create", { name: $("#pactName").value || "回响三人", type: $("#pactType").value });
       toast("契约已创建");
@@ -807,6 +912,7 @@ function renderPact() {
     }
   });
   $$("[data-join]").forEach((button) => button.addEventListener("click", async () => {
+    if (isGuest()) { toast("请先登录再加入契约"); $("#authDialog").showModal(); return; }
     try {
       await post("/api/pact/join", { pactId: button.dataset.join });
       toast("已加入契约");
@@ -837,6 +943,7 @@ function renderOracle() {
     </article>
   `).join("")}</div>`;
   $$("[data-oracle]").forEach((button) => button.addEventListener("click", async () => {
+    if (isGuest()) { toast("请先登录再购买情报"); $("#authDialog").showModal(); return; }
     try {
       const card = state.v2.oracleCards.find((c) => c.id === button.dataset.oracle);
       const effectText = card ? (effectLabels[card.effect?.type] || "情报已生效") : "";
@@ -844,6 +951,9 @@ function renderOracle() {
       toast(`情报已写入铭刻之书：${effectText}`);
       showCenterLine(`情报「${card?.title || ""}」：${effectText}`, "path");
       playSfx("pact");
+      // 购买光效
+      const article = button.closest("article");
+      if (article) { article.classList.add("oracle-bought-glow"); setTimeout(() => article.classList.remove("oracle-bought-glow"), 1500); }
       await load();
     } catch (error) {
       toast(error.message);
@@ -941,6 +1051,11 @@ function addFloat(text, x, y, color = "#f2c14e", size = 16) {
 
 function addRipple(x, y, radius = 90, color = "rgba(242, 193, 78, .52)") {
   trial.effects.ripples.push({ x, y, radius, color, age: 0, life: 420 });
+}
+
+function pulseScreen(color = "rgba(255,245,194,0.25)", duration = 400) {
+  trial.effects.pulseUntil = performance.now() + duration;
+  trial.effects.pulseColor = color;
 }
 
 function makePrecisionMarker() {
@@ -1071,21 +1186,36 @@ function spawnParticles(rows, cells) {
   rows.forEach((rowIndex) => {
     for (let x = 0; x < trial.cols; x += 1) {
       const block = cells.get(`${rowIndex}:${x}`) || { color: "#c5a55a" };
-      for (let i = 0; i < 5; i += 1) {
+      // 主碎片粒子
+      for (let i = 0; i < 8; i += 1) {
         trial.effects.particles.push({
           x: (x + 0.5) * trial.cell,
           y: (rowIndex + 0.5) * trial.cell,
-          vx: (Math.random() - 0.5) * 0.34,
-          vy: -0.16 - Math.random() * 0.18,
-          size: 2 + Math.random() * 3,
+          vx: (Math.random() - 0.5) * 0.52,
+          vy: -0.28 - Math.random() * 0.34,
+          size: 2 + Math.random() * 4,
           color: block.color,
           age: 0,
-          life: 440 + Math.random() * 160
+          life: 480 + Math.random() * 220
+        });
+      }
+      // 金色光尘（每格额外2个）
+      for (let i = 0; i < 2; i += 1) {
+        trial.effects.sparkles.push({
+          x: (x + 0.5) * trial.cell + (Math.random() - 0.5) * trial.cell * 0.6,
+          y: (rowIndex + 0.5) * trial.cell + (Math.random() - 0.5) * trial.cell * 0.6,
+          vx: (Math.random() - 0.5) * 0.22,
+          vy: -0.45 - Math.random() * 0.4,
+          size: 1.5 + Math.random() * 2.5,
+          age: 0,
+          life: 360 + Math.random() * 300
         });
       }
     }
     addRipple(trial.cols * trial.cell / 2, (rowIndex + 0.5) * trial.cell, 70 + rows.length * 28);
   });
+  // 震动反馈
+  shake(rows.length >= 4 ? 3.5 : rows.length * 0.8, 150 + rows.length * 40);
 }
 
 function removeRandomNeighbor(clearedRows) {
@@ -1241,11 +1371,15 @@ function clearLines() {
       showCenterLine("四✨消✨！", "train");
       document.body.classList.add("tetris-flash");
       setTimeout(() => document.body.classList.remove("tetris-flash"), 800);
+      pulseScreen("rgba(255,245,194,0.35)", 500);
     }
     if (trial.combo >= 5) {
       queueWhisper(`🔥${trial.combo}连消！`);
       document.body.classList.add("combo-surge");
       setTimeout(() => document.body.classList.remove("combo-surge"), 600);
+      pulseScreen("rgba(255,160,60,0.22)", 350);
+    } else if (trial.combo >= 3) {
+      pulseScreen("rgba(242,193,78,0.15)", 280);
     }
     shake(cleared >= 4 ? 3.4 : 1 + cleared * 0.45, 110 + cleared * 45);
     trial.grid = trial.grid.filter((row) => row.some((cell) => !cell));
@@ -1504,6 +1638,12 @@ function updateTrialEffects(delta) {
     item.y += item.vy * delta;
     item.vy += 0.0008 * delta;
   });
+  effects.sparkles.forEach((item) => {
+    item.age += delta;
+    item.x += item.vx * delta;
+    item.y += item.vy * delta;
+    item.vy += 0.0004 * delta;
+  });
   effects.floats.forEach((item) => {
     item.age += delta;
     item.y += item.vy * delta;
@@ -1512,6 +1652,7 @@ function updateTrialEffects(delta) {
   effects.clears.forEach((item) => { item.age += delta; });
   for (const mark of trial.engravingMarks.values()) mark.age += delta;
   effects.particles = effects.particles.filter((item) => item.age < item.life);
+  effects.sparkles = effects.sparkles.filter((item) => item.age < item.life);
   effects.floats = effects.floats.filter((item) => item.age < item.life);
   effects.ripples = effects.ripples.filter((item) => item.age < item.life);
   effects.clears = effects.clears.filter((item) => item.age < item.life);
@@ -1541,6 +1682,26 @@ function drawTrialEffects(ctx) {
     ctx.fillRect(item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
     ctx.globalAlpha = 1;
   });
+  // 金色光尘
+  effects.sparkles.forEach((item) => {
+    const alpha = Math.max(0, 1 - item.age / item.life);
+    ctx.globalAlpha = alpha * 0.9;
+    const gradient = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, item.size);
+    gradient.addColorStop(0, "rgba(255,242,170,0.95)");
+    gradient.addColorStop(0.5, "rgba(242,193,78,0.6)");
+    gradient.addColorStop(1, "rgba(184,134,11,0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(item.x - item.size * 1.5, item.y - item.size * 1.5, item.size * 3, item.size * 3);
+    ctx.globalAlpha = 1;
+  });
+  // 屏幕脉冲（高combo或四消时）
+  if (now < trial.effects.pulseUntil) {
+    const t = 1 - (trial.effects.pulseUntil - now) / 400;
+    ctx.globalAlpha = Math.max(0, (1 - t) * 0.25);
+    ctx.fillStyle = trial.effects.pulseColor || "rgba(255,245,194,0.25)";
+    ctx.fillRect(-5, -5, cssWidth + 10, cssHeight + 10);
+    ctx.globalAlpha = 1;
+  }
   effects.floats.forEach((item) => {
     const alpha = Math.max(0, 1 - item.age / item.life);
     ctx.globalAlpha = Math.min(1, alpha * 1.35);
@@ -1695,6 +1856,11 @@ async function endTrial() {
 }
 
 function startTrial() {
+  if (isGuest()) {
+    toast("请先登录再进入试炼");
+    $("#authDialog").showModal();
+    return;
+  }
   ensureAudio();
   playSfx("whisper");
   unlockRealm("wenzhong");
