@@ -32,15 +32,45 @@
             <div>
               <h1>方块试炼</h1>
               <p id="zodiacEffect">等待晨钟列车宣告规则</p>
+              <div class="trial-mode-row">
+                <select id="trialMode" aria-label="试炼模式">
+                  <option value="standard">昼夜标准</option>
+                  <option value="timed">60秒限时</option>
+                  <option value="precision">精准刻度</option>
+                  <option value="survival">倒计时生存</option>
+                  <option value="rhythm">节拍坠落</option>
+                </select>
+                <span id="rhythmLight" class="rhythm-light">节拍</span>
+              </div>
             </div>
             <button id="startTrial" type="button">开始试炼</button>
           </div>
-          <canvas id="trialBoard" width="300" height="600"></canvas>
+          <div class="trial-board-shell">
+            <canvas id="trialBoard" width="300" height="600"></canvas>
+            <div id="trialOverlay" class="trial-overlay"></div>
+          </div>
           <div class="trial-stats">
             <span>分数 <b id="trialScore">0</b></span>
             <span>消行 <b id="trialLines">0</b></span>
             <span>连击 <b id="trialCombo">0</b></span>
             <span>暂存 <b id="holdPiece">--</b></span>
+            <span>模式 <b id="trialModeText">昼夜标准</b></span>
+            <span>计时 <b id="trialTimer">0s</b></span>
+          </div>
+          <div class="trial-subgrid">
+            <div class="next-preview"><span>NEXT</span><canvas id="nextPiece" width="110" height="110"></canvas></div>
+            <div class="rewind-panel-v2">
+              <div><span>钟渊</span><b id="zhongyuanValue">0/10</b></div>
+              <div class="path-bar"><i id="zhongyuanBar" style="width:0%"></i></div>
+              <select id="rewindSelect" aria-label="回溯点"><option>暂无回溯点</option></select>
+              <button id="rewindBtn" type="button" disabled>回溯</button>
+            </div>
+          </div>
+          <div class="touch-pad" aria-label="移动端触摸控制">
+            <button data-touch="left" type="button">←</button>
+            <button data-touch="rotate" type="button">↻</button>
+            <button data-touch="right" type="button">→</button>
+            <button data-touch="drop" type="button">↓</button>
           </div>
           <div class="trial-help">←/→ 移动，↓ 软降，↑/Z 旋转，空格硬降，C 暂存</div>
         </section>
@@ -92,6 +122,11 @@
     </dialog>
 
     <div id="toast" class="v2-toast"></div>
+    <button id="pathToggle" class="path-toggle-v2" type="button" title="极道·钟渊之路">道</button>
+    <aside id="pathPanel" class="path-panel-v2" aria-label="极道钟渊之路">
+      <header><b>极道·钟渊之路</b><button id="pathClose" type="button">×</button></header>
+      <div id="pathList"></div>
+    </aside>
     <script type="module" src="/js/v2-main.js"></script>
   </body>
 </html>

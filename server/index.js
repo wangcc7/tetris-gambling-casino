@@ -13,7 +13,7 @@ const playerPort = Number(process.env.PLAYER_PORT || 8080);
 const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
 const adminPassword = process.env.ADMIN_PASSWORD || "gambleMaster666";
-const appVersion = process.env.APP_VERSION || "0.7.1-fun";
+const appVersion = process.env.APP_VERSION || "0.8.0-v4";
 const enableV1Jobs = process.env.ENABLE_V1_JOBS === "1";
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",
@@ -248,7 +248,8 @@ const state = {
     pacts: [],
     oracleCards: [],
     purchasedOracle: {},
-    trainLog: []
+    trainLog: [],
+    rankingSnapshots: []
   }
 };
 
@@ -360,6 +361,7 @@ function ensureV2State() {
     state.v2.pacts = [];
     state.v2.purchasedOracle = {};
     state.v2.trainLog = [];
+    state.v2.rankingSnapshots = [];
     pushMessage("终焉列车", `【晨钟列车进站】今日试炼宣言：「${cycle.rulingZodiac}·${cycle.zodiacCode}：${cycle.title}」${cycle.zodiacEffect}`, "train", "全城广播");
   }
   return { cycle, trains: trainScheduleFor(cycle) };
@@ -1193,7 +1195,12 @@ function leaderboards() {
 
 function rankingsV2() {
   const players = Object.values(state.players);
+  const snapshots = (state.v2.rankingSnapshots || []).filter((item) => item.dayKey === state.v2.dayKey);
   const rows = (mapper, fallback) => [...players.map(mapper), ...fallback]
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .slice(0, 50)
+    .map((item, index) => ({ rank: index + 1, ...item }));
+  const snapshotRows = (mapper, fallback) => [...snapshots.map(mapper), ...fallback]
     .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
     .slice(0, 50)
     .map((item, index) => ({ rank: index + 1, ...item }));
@@ -1205,12 +1212,12 @@ function rankingsV2() {
     { name: "列车长", score: 6400 }
   ];
   return {
-    daily_marks: rows((p) => ({ name: p.name, score: p.lines * 100 + p.score }), fallback),
+    daily_marks: snapshotRows((r) => ({ name: r.name, score: r.marks || r.score }), fallback),
     daily_fog: rows((p) => ({ name: p.name, score: Math.max(0, p.coins - state.economy.initialCoins) }), fallback.slice().reverse()),
     daily_pact: rows((p) => ({ name: p.name, score: Number(p.stats?.guildActions || 0) * 300 + p.lines * 10 }), fallback),
-    cycle_total: rows((p) => ({ name: p.name, score: p.score + p.coins }), fallback),
+    cycle_total: snapshotRows((r) => ({ name: r.name, score: r.score + r.marks }), fallback),
     beast_hall: rows((p) => ({ name: p.name, score: Number(p.stats?.beasts || 0) * 1000 + p.score }), fallback),
-    zodiac_album: rows((p) => ({ name: p.name, score: Number(p.stats?.zodiacMarks || 0) * 1000 + p.lines }), fallback)
+    zodiac_album: snapshotRows((r) => ({ name: r.name, score: r.lines * 1000 + r.score }), fallback)
   };
 }
 
@@ -1283,7 +1290,9 @@ async function addPactContribution(player, marks) {
   if (!pact) return;
   const member = pact.members.find((item) => item.userId === player.id);
   const oracleBoost = Number(player.stats.oraclePactBoost || 0) > 0 ? 0.2 : 0;
-  const gain = Math.round(marks * (1 + upgradeLevel(player, "pact") * 0.05 + oracleBoost));
+  const cycle = cycleNow();
+  const zodiacBoost = cycle.rulingZodiac === "羊" ? 2 : 1;
+  const gain = Math.round(marks * zodiacBoost * (1 + upgradeLevel(player, "pact") * 0.05 + oracleBoost));
   if (oracleBoost) player.stats.oraclePactBoost -= 1;
   member.contribution = Number(member.contribution || 0) + gain;
   pact.totalContribution = pact.members.reduce((sum, item) => sum + Number(item.contribution || 0), 0);
@@ -1325,7 +1334,7 @@ function settleLines(player, lines, tags = []) {
   player.lines += lines;
   if (tags.includes("shield")) player.shields += 1;
   if (tags.includes("bomb")) pushMessage("战场广播", `${player.name} 触发终焉反噬，拿走 300 分但头顶开始发凉`, "danger", "战场");
-  return { total, base, crit, selfBoom };
+  return { total, marks: base, echoBonus: crit + selfBoom, base, crit, selfBoom };
 }
 
 function moveMarket() {
@@ -1688,6 +1697,18 @@ async function api(req, res) {
     player.score += score;
     player.lines += lines;
     player.stats.trials = Number(player.stats.trials || 0) + 1;
+    state.v2.rankingSnapshots ||= [];
+    state.v2.rankingSnapshots.unshift({
+      dayKey: state.v2.dayKey,
+      userId: player.id,
+      name: player.name,
+      score,
+      lines,
+      marks,
+      mode,
+      createdAt: new Date().toISOString()
+    });
+    state.v2.rankingSnapshots = state.v2.rankingSnapshots.slice(0, 200);
     await addPactContribution(player, marks);
     if (dbReady) {
       await db.query("INSERT INTO v2_trial_records (id, user_id, day_key, score, lines_cleared, duration_sec, mode, marks_earned) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [

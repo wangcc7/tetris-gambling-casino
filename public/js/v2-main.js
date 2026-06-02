@@ -30,6 +30,43 @@ const blockDefs = {
   J: { name: "铭刻之笔", glyph: "刻", color: "#2F4F6F" }
 };
 
+const modeNames = {
+  standard: "昼夜标准",
+  timed: "60秒限时",
+  precision: "精准刻度",
+  survival: "倒计时生存",
+  rhythm: "节拍坠落"
+};
+
+const specialModifiers = {
+  rewind: { name: "时间倒流", glyph: "返", color: "#d6f7ff", desc: "消行后回退到数步前，奖励保留" },
+  pendulum: { name: "钟摆", glyph: "摆", color: "#ffe08a", desc: "落地前可左右摆动 1 秒" },
+  curse: { name: "诅咒", glyph: "禁", color: "#f06aff", desc: "满行必须一次消 2 行以上才能解除" },
+  nirvana: { name: "朱雀涅槃", glyph: "凰", color: "#ff7b45", desc: "朱雀日出现，清理棋盘底部 3 行" },
+  dragon: { name: "青龙裁决", glyph: "龙", color: "#57d7b7", desc: "青龙日稀有方块，全属性强化" }
+};
+
+const pathKey = "zhongyuanPathV1";
+const pathRealms = [
+  { id: "wenzhong", name: "闻钟", desc: "首次游戏解锁", reward: "基础钟声" },
+  { id: "jianhen", name: "见痕", desc: "累计消除100行", reward: "铭文印记变为亮金色" },
+  { id: "zhifan", name: "知返", desc: "单局触发5次回响", reward: "回响波纹半径扩大30%" },
+  { id: "tinglan", name: "听澜", desc: "单局总分达到5000分", reward: "新增低语：潮声已至" },
+  { id: "pojie", name: "破界", desc: "单次消除4行", reward: "四消钟光拖尾" },
+  { id: "wangshi", name: "忘时", desc: "连续3局分数超过3000", reward: "终局文字改为你已留下回响" },
+  { id: "jidao", name: "极道", desc: "累计消除1000行", reward: "终焉粒子与标题后缀" }
+];
+
+const whisperThresholds = [
+  [100, "时间不多了…"],
+  [300, "你还记得第几天吗？"],
+  [600, "钟声又响了。"],
+  [1000, "别回头。"]
+];
+
+const engravingRunes = ["刻", "时", "渊", "钟", "回", "寂"];
+let pathState = loadPathState();
+
 const trial = {
   cols: 10,
   rows: 20,
@@ -49,6 +86,27 @@ const trial = {
   pendingGarbageRows: 0,
   lastClearAt: 0,
   echoStacks: 0,
+  echoTriggers: 0,
+  zhongyuan: 0,
+  history: [],
+  mode: localStorage.getItem("trialModeV2") || "standard",
+  modeRemaining: 60,
+  modeStartedAt: 0,
+  survivalStep: 0,
+  rhythmBeat: false,
+  precisionMarker: null,
+  goldFloat: null,
+  lockDelay: 0,
+  lockElapsed: 0,
+  landingY: null,
+  nirvanaLines: 0,
+  touched: false,
+  pendingWhispers: [],
+  shownWhispers: new Set(),
+  engravingMarks: new Map(),
+  lastEngravings: new Map(),
+  specialCounts: [],
+  hardDrops: 0,
   startedAt: 0,
   lastFrame: 0,
   dropElapsed: 0,
@@ -95,6 +153,135 @@ function getSession() {
 
 function setSession(session) {
   localStorage.setItem(sessionKey, JSON.stringify(session));
+}
+
+function loadPathState() {
+  const fallback = { unlocked: {}, totalLines: 0, recentScores: [] };
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(pathKey) || "{}") };
+  } catch {
+    return fallback;
+  }
+}
+
+function savePathState() {
+  localStorage.setItem(pathKey, JSON.stringify(pathState));
+}
+
+function hasRealm(id) {
+  return Boolean(pathState.unlocked?.[id]);
+}
+
+function cloneGrid(source) {
+  return source.map((row) => row.map((cell) => cell ? { ...cell } : null));
+}
+
+function clonePiece(piece) {
+  return piece ? { ...piece, matrix: piece.matrix.map((row) => [...row]) } : null;
+}
+
+function currentCycleDay() {
+  return Number(state?.v2?.cycle?.dayNumber || 0);
+}
+
+function currentZodiac() {
+  return state?.v2?.cycle?.rulingZodiac || "";
+}
+
+function currentBeast() {
+  return state?.v2?.cycle?.activeBeastEvent || "";
+}
+
+function showCenterLine(text, className = "whisper") {
+  const overlay = $("#trialOverlay");
+  if (!overlay) return;
+  overlay.textContent = text;
+  overlay.className = `trial-overlay show ${className}`;
+  setTimeout(() => overlay.classList.remove("show"), className === "train" ? 3000 : 2200);
+}
+
+function speakLine(text) {
+  if (!("speechSynthesis" in window)) return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "zh-CN";
+    utterance.rate = 0.88;
+    utterance.pitch = 0.72;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Voice is ornamental; the visual whisper remains the source of truth.
+  }
+}
+
+function unlockRealm(id) {
+  if (hasRealm(id)) return false;
+  const realm = pathRealms.find((item) => item.id === id);
+  if (!realm) return false;
+  pathState.unlocked[id] = new Date().toISOString();
+  savePathState();
+  showCenterLine(`极道·${realm.name} 已悟`, "path");
+  playSfx("whisper", 1.4);
+  renderPathPanel();
+  return true;
+}
+
+function checkPathUnlocks() {
+  if (pathState.totalLines >= 100) unlockRealm("jianhen");
+  if (pathState.totalLines >= 1000) unlockRealm("jidao");
+  if (trial.echoTriggers >= 5) unlockRealm("zhifan");
+  if (trial.score >= 5000) unlockRealm("tinglan");
+}
+
+function recordFinishedRun() {
+  pathState.recentScores = [...(pathState.recentScores || []), trial.score].slice(-3);
+  savePathState();
+  if (pathState.recentScores.length === 3 && pathState.recentScores.every((score) => score > 3000)) unlockRealm("wangshi");
+}
+
+function renderPathPanel() {
+  const list = $("#pathList");
+  if (!list) return;
+  list.innerHTML = pathRealms.map((realm, index) => {
+    const unlocked = hasRealm(realm.id);
+    return `
+      <article class="${unlocked ? "unlocked" : ""}">
+        <span>${index + 1}</span>
+        <div><b>${realm.name}</b><small>${realm.desc}</small><em>${realm.reward}</em></div>
+        <strong>${unlocked ? "已悟" : "未解"}</strong>
+      </article>
+    `;
+  }).join("");
+  document.body.classList.toggle("realm-jidao", hasRealm("jidao"));
+  const brand = $(".v2-brand b");
+  if (brand) brand.textContent = hasRealm("jidao") ? "终焉钟城 · 极道" : "终焉钟城";
+}
+
+function queueWhisper(text) {
+  trial.pendingWhispers.push(text);
+  showNextWhisper();
+}
+
+function showNextWhisper() {
+  if (!trial.pendingWhispers.length || $("#trialOverlay")?.classList.contains("show")) return;
+  const text = trial.pendingWhispers.shift();
+  showCenterLine(text, "whisper");
+  playSfx("whisper");
+  if (text.length <= 10) speakLine(text);
+  setTimeout(showNextWhisper, 2600);
+}
+
+function addRunScore(points) {
+  const before = trial.score;
+  trial.score += points;
+  for (const [threshold, text] of whisperThresholds) {
+    if (before < threshold && trial.score >= threshold && !trial.shownWhispers.has(threshold)) {
+      trial.shownWhispers.add(threshold);
+      queueWhisper(text);
+    }
+  }
+  if (hasRealm("tinglan") && before < 1200 && trial.score >= 1200) queueWhisper("潮声已至");
+  checkPathUnlocks();
 }
 
 async function api(path, options = {}) {
@@ -187,6 +374,9 @@ function playSfx(name, intensity = 1) {
   if (name === "game_over") { tone(98, 0.55, "sine", 0.055); tone(49, 0.75, "triangle", 0.035, 0.08); }
   if (name === "shield") { tone(392, 0.08, "triangle", 0.035); tone(784, 0.11, "sine", 0.024, 0.055); }
   if (name === "whisper") { tone(740, 0.08, "sine", 0.018); tone(932, 0.11, "triangle", 0.014, 0.05); }
+  if (name === "train") { tone(220, 0.55, "sawtooth", 0.035); tone(330, 0.9, "triangle", 0.028, 0.12); noise(0.32, 0.018); }
+  if (name === "beast") { tone(72, 0.75, "sawtooth", 0.055); tone(144, 0.48, "triangle", 0.04, 0.06); noise(0.22, 0.04); }
+  if (name === "pact") { tone(392, 0.12, "triangle", 0.034); tone(587, 0.18, "sine", 0.025, 0.08); tone(784, 0.22, "triangle", 0.02, 0.16); }
 }
 
 function playClear(cleared) {
@@ -263,6 +453,7 @@ function connectWS() {
       state.messages.unshift(message.payload);
       state.messages = state.messages.slice(0, 80);
       $("#railBroadcast").textContent = `${message.payload.author}：${message.payload.text}`;
+      if (message.type === "train") handleTrainEvent(message.payload);
       if (activeTab === "broadcast") renderBroadcast();
     }
     if (message.type === "fog_price" && Array.isArray(message.payload)) {
@@ -290,6 +481,28 @@ function connectWS() {
   ws.addEventListener("close", () => setTimeout(connectWS, 2000));
 }
 
+function handleTrainEvent(payload) {
+  const title = payload.title || payload.author || "终焉列车";
+  showCenterLine(`${title} 到站`, "train");
+  playSfx("train");
+  document.body.classList.add("train-pulse");
+  setTimeout(() => document.body.classList.remove("train-pulse"), 3200);
+  if (title.includes("正午") || payload.text?.includes("雾区")) {
+    $$(".fog-card").forEach((card) => {
+      card.classList.remove("train-highlight");
+      void card.offsetWidth;
+      card.classList.add("train-highlight");
+    });
+  }
+  if (title.includes("黄昏") || payload.text?.includes("情报")) {
+    $$(".oracle-grid article").forEach((card) => {
+      card.classList.remove("train-highlight");
+      void card.offsetWidth;
+      card.classList.add("train-highlight");
+    });
+  }
+}
+
 function renderAll() {
   if (!state) return;
   const cycle = state.v2.cycle;
@@ -302,7 +515,11 @@ function renderAll() {
   const nextTrain = state.v2.trains.find((train) => !train.passed) || state.v2.trains[0];
   $("#trainRail").textContent = `下一班列车：${nextTrain.name} ${nextTrain.time} | ${nextTrain.effect}`;
   $("#railBroadcast").textContent = state.messages[0] ? `${state.messages[0].author}：${state.messages[0].text}` : "钟楼仍在校准。";
+  $("#trialModeText").textContent = modeNames[trial.mode] || modeNames.standard;
+  $("#trialMode").value = trial.mode;
   renderChronicle();
+  renderPathPanel();
+  drawNextPiece();
   renderTab();
 }
 
@@ -334,13 +551,28 @@ function renderChronicle() {
   `;
   $$("[data-engrave]").forEach((button) => button.addEventListener("click", async () => {
     try {
-      await post("/api/player/engrave", { category: button.dataset.engrave });
-      toast("铭刻升级完成");
+      const before = state.v2.upgradeTree.find((item) => item.category === button.dataset.engrave);
+      const result = await post("/api/player/engrave", { category: button.dataset.engrave });
+      const after = result.data?.upgrades?.find((item) => item.category === button.dataset.engrave);
+      const beforeText = upgradeEffectText(before?.category, before?.level || 0);
+      const afterText = upgradeEffectText(after?.category, after?.level || (before?.level || 0) + 1);
+      toast(`铭刻升级完成：${beforeText} → ${afterText}`);
+      showCenterLine(`${before?.name || "铭刻"} ${beforeText} → ${afterText}`, "path");
+      playSfx("pact");
       await load();
     } catch (error) {
       toast(error.message);
     }
   }));
+}
+
+function upgradeEffectText(category, level) {
+  if (category === "score") return `分数加成 ${(1 + level * 0.05).toFixed(2)}x`;
+  if (category === "fee") return `雾区手续费 ${Math.max(1, 5 - level)}%`;
+  if (category === "shield") return `护盾上限 ${1 + level}`;
+  if (category === "oracle") return `情报折扣 ${Math.round(level * 5)}%`;
+  if (category === "train") return `列车预警 Lv.${level}`;
+  return `Lv.${level}`;
 }
 
 function renderTab() {
@@ -490,9 +722,36 @@ function nextPieceType() {
   return pieceBag.pop();
 }
 
+function maybeSpecialModifier(forceType) {
+  if (forceType) return null;
+  if (currentBeast() === "朱雀" && trial.nirvanaLines >= 3) {
+    trial.nirvanaLines = 0;
+    return "nirvana";
+  }
+  if (currentBeast() === "青龙" && Math.random() < 0.15) return "dragon";
+  if (Math.random() > 0.28) return null;
+  const keys = ["rewind", "pendulum", "curse"];
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+
 function makePiece(type = null) {
   const shape = type || nextPieceType();
-  return { type: shape, matrix: shapes[shape].map((row) => [...row]), x: 3, y: 0, ...blockDefs[shape] };
+  const modifier = maybeSpecialModifier(type);
+  const special = modifier ? specialModifiers[modifier] : null;
+  return {
+    type: shape,
+    matrix: shapes[shape].map((row) => [...row]),
+    x: 3,
+    y: 0,
+    ...blockDefs[shape],
+    modifier,
+    specialName: special?.name || "",
+    glyph: special?.glyph || blockDefs[shape].glyph,
+    color: special?.color || blockDefs[shape].color,
+    landingDelayUntil: 0,
+    lastSwingAt: 0,
+    swingDir: 1
+  };
 }
 
 function rotate(matrix) {
@@ -536,6 +795,130 @@ function addFloat(text, x, y, color = "#f2c14e", size = 16) {
 
 function addRipple(x, y, radius = 90, color = "rgba(242, 193, 78, .52)") {
   trial.effects.ripples.push({ x, y, radius, color, age: 0, life: 420 });
+}
+
+function makePrecisionMarker() {
+  return {
+    x: 2 + Math.floor(Math.random() * Math.max(1, trial.cols - 4)),
+    y: 8 + Math.floor(Math.random() * 8)
+  };
+}
+
+function pieceTouchesPrecision(piece) {
+  if (!trial.precisionMarker) return false;
+  return piece.matrix.some((row, y) => row.some((value, x) => (
+    value && piece.x + x === trial.precisionMarker.x && piece.y + y === trial.precisionMarker.y
+  )));
+}
+
+function rememberStep(reason) {
+  if (!trial.running || !trial.piece) return;
+  trial.history.unshift({
+    reason,
+    at: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+    grid: cloneGrid(trial.grid),
+    piece: clonePiece(trial.piece),
+    next: clonePiece(trial.next),
+    hold: trial.hold,
+    canHold: trial.canHold,
+    shields: trial.shields,
+    goldFloat: trial.goldFloat ? { ...trial.goldFloat } : null,
+    precisionMarker: trial.precisionMarker ? { ...trial.precisionMarker } : null
+  });
+  trial.history = trial.history.slice(0, 5);
+  updateRewindPanel();
+}
+
+function restoreHistory(index = 0) {
+  const snapshot = trial.history[index];
+  if (!snapshot || trial.zhongyuan < 10) {
+    toast(snapshot ? "钟渊能量未满，无法回溯" : "钟渊里还没有可回溯的状态");
+    return false;
+  }
+  trial.grid = cloneGrid(snapshot.grid);
+  trial.piece = clonePiece(snapshot.piece);
+  trial.next = clonePiece(snapshot.next);
+  trial.hold = snapshot.hold;
+  trial.canHold = snapshot.canHold;
+  trial.shields = snapshot.shields;
+  trial.goldFloat = snapshot.goldFloat ? { ...snapshot.goldFloat } : null;
+  trial.precisionMarker = snapshot.precisionMarker ? { ...snapshot.precisionMarker } : null;
+  trial.zhongyuan = 0;
+  addFloat("回溯完成", trial.cols * trial.cell / 2, 138, "#d6f7ff", 22);
+  playSfx("whisper");
+  updateRewindPanel();
+  ensureRenderLoop();
+  return true;
+}
+
+function markEngravings(fullRows) {
+  const now = performance.now();
+  fullRows.forEach((y) => {
+    for (let x = 0; x < trial.cols; x += 1) {
+      const key = `${x},${y}`;
+      const last = trial.lastEngravings.get(key) || 0;
+      trial.engravingMarks.set(key, {
+        x,
+        y,
+        age: 0,
+        life: 5000,
+        level: now - last <= 10000 || hasRealm("jianhen") ? 2 : 1,
+        rune: engravingRunes[(x + y + Math.floor(now / 1000)) % engravingRunes.length]
+      });
+      trial.lastEngravings.set(key, now);
+    }
+  });
+}
+
+function drawEngravings(ctx) {
+  for (const [key, mark] of trial.engravingMarks) {
+    const occupied = trial.grid[mark.y]?.[mark.x] || (trial.piece && trial.piece.matrix.some((row, y) => row.some((value, x) => (
+      value && trial.piece.x + x === mark.x && trial.piece.y + y === mark.y
+    ))));
+    if (occupied || mark.age >= mark.life) {
+      trial.engravingMarks.delete(key);
+      continue;
+    }
+    const alpha = Math.max(0, 1 - mark.age / mark.life) * (mark.level > 1 ? 0.85 : 0.48);
+    const left = mark.x * trial.cell;
+    const top = mark.y * trial.cell;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = mark.level > 1 ? "#ffd45f" : "#f2c14e";
+    ctx.font = `${mark.level > 1 ? 800 : 700} 15px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(242,193,78,.75)";
+    ctx.shadowBlur = mark.level > 1 ? 12 : 7;
+    ctx.fillText(mark.rune, left + trial.cell / 2, top + trial.cell / 2);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+}
+
+function maybeSpawnGoldFloat() {
+  if (trial.goldFloat || !trial.running || Math.random() > 0.22) return;
+  trial.goldFloat = {
+    x: Math.floor(Math.random() * trial.cols),
+    y: 2 + Math.floor(Math.random() * 12),
+    value: [50, 100, 200][Math.floor(Math.random() * 3)],
+    bornAt: performance.now(),
+    life: 10000
+  };
+}
+
+function updateRewindPanel() {
+  const value = $("#zhongyuanValue");
+  const bar = $("#zhongyuanBar");
+  const select = $("#rewindSelect");
+  const btn = $("#rewindBtn");
+  if (value) value.textContent = `${trial.zhongyuan}/10`;
+  if (bar) bar.style.width = `${trial.zhongyuan * 10}%`;
+  if (select) {
+    select.innerHTML = trial.history.length
+      ? trial.history.map((item, index) => `<option value="${index}">${item.at} · ${escapeHtml(item.reason)}</option>`).join("")
+      : '<option value="0">暂无回溯点</option>';
+  }
+  if (btn) btn.disabled = trial.zhongyuan < 10 || !trial.history.length;
 }
 
 function spawnParticles(rows, cells) {
@@ -589,35 +972,69 @@ function addGarbageRow() {
 function applyBlockAbility(cleared, clearedRows, baseScore) {
   if (!cleared || !trial.piece) return 0;
   const type = trial.piece.type;
+  const power = currentBeast() === "青龙" || trial.piece.modifier === "dragon" ? 1.5 : 1;
   let bonus = 0;
   if (type === "I") {
-    bonus += Math.round(baseScore * 0.45);
-    addFloat("长鸣+45%", trial.cols * trial.cell / 2, 118, "#8eeeff", 18);
+    bonus += Math.round(baseScore * 0.45 * power);
+    addFloat(`长鸣+${Math.round(45 * power)}%`, trial.cols * trial.cell / 2, 118, "#8eeeff", 18);
     trial.effects.flashUntil = performance.now() + 130;
   }
   if (type === "T" && Math.random() < 0.5 && removeRandomNeighbor(clearedRows)) {
-    bonus += 80;
+    bonus += Math.round(80 * power);
     playSfx("whisper");
   }
   if (type === "S") {
-    bonus += cleared * 70;
-    addFloat("雾息+" + money(cleared * 70), trial.cols * trial.cell / 2, 154, "#9cc7e8", 16);
+    bonus += Math.round(cleared * 70 * power);
+    addFloat("雾息+" + money(cleared * 70 * power), trial.cols * trial.cell / 2, 154, "#9cc7e8", 16);
   }
   if (type === "L") {
-    bonus += cleared * 90;
-    addFloat("轨钉拾取+" + money(cleared * 90), trial.cols * trial.cell / 2, 180, "#d5d5d5", 15);
+    const floatReward = trial.goldFloat ? trial.goldFloat.value : cleared * 90;
+    bonus += Math.round(floatReward * power);
+    trial.goldFloat = null;
+    addFloat("轨钉拾取+" + money(floatReward * power), trial.cols * trial.cell / 2, 180, "#d5d5d5", 15);
   }
   if (type === "J") {
     trial.slowPieces = Math.max(trial.slowPieces, 1);
-    bonus += 60;
+    bonus += Math.round(60 * power);
     addFloat("刻痕减速", trial.cols * trial.cell / 2, 206, "#9dbce5", 15);
   }
   if (type === "Z") {
     trial.pendingGarbageRows += 1;
-    bonus += 300;
-    addFloat("终焉+300", trial.cols * trial.cell / 2, 232, "#ff9ab8", 17);
+    bonus += Math.round(300 * power);
+    addFloat(`终焉+${money(300 * power)}`, trial.cols * trial.cell / 2, 232, "#ff9ab8", 17);
     shake(2.2, 180);
   }
+  if (trial.piece.modifier === "nirvana") {
+    clearBottomRows(3);
+    bonus += 500;
+    addFloat("朱雀涅槃", trial.cols * trial.cell / 2, 258, "#ffb36d", 22);
+    playSfx("beast");
+  }
+  return bonus;
+}
+
+function clearBottomRows(count) {
+  for (let i = 0; i < count; i += 1) {
+    trial.grid.pop();
+    trial.grid.unshift(Array(trial.cols).fill(null));
+  }
+}
+
+function zodiacScoreBonus(cleared, baseScore, priorLines) {
+  const zodiac = currentZodiac();
+  let bonus = 0;
+  if (zodiac === "鼠" && priorLines === 0) {
+    bonus += baseScore;
+    addFloat("鼠觉首消x2", trial.cols * trial.cell / 2, 330, "#fff1a8", 18);
+  }
+  if (zodiac === "牛" && trial.combo > 1) {
+    bonus += Math.round(baseScore * 0.2 * trial.combo);
+    addFloat(`牛固连击+${trial.combo * 20}%`, trial.cols * trial.cell / 2, 356, "#f6d57b", 16);
+  }
+  if (zodiac === "马" || currentBeast() === "玄武") {
+    bonus += Math.round(cleared * Math.max(1, (Date.now() - trial.startedAt) / 1000) * 2);
+  }
+  if (zodiac === "鸡" || currentBeast() === "青龙") bonus += Math.round(baseScore * 0.25);
   return bonus;
 }
 
@@ -631,34 +1048,90 @@ function clearLines() {
     }
   });
   const cleared = clearedRows.length;
+  const curseLocked = clearedRows.some((y) => trial.grid[y].some((cell) => cell?.modifier === "curse"));
+  if (curseLocked && cleared < 2) {
+    addFloat("诅咒拒绝结算", trial.cols * trial.cell / 2, 120, "#f06aff", 18);
+    playSfx("whisper");
+    trial.combo = 0;
+    return;
+  }
   if (cleared) {
+    const priorLines = trial.lines;
+    if (trial.piece?.modifier) trial.specialCounts.push(trial.piece.modifier);
     trial.combo += 1;
     trial.lines += cleared;
+    trial.zhongyuan = Math.min(10, trial.zhongyuan + cleared);
+    trial.nirvanaLines += cleared;
+    pathState.totalLines = Number(pathState.totalLines || 0) + cleared;
+    savePathState();
+    if (cleared >= 4) unlockRealm("pojie");
+    markEngravings(clearedRows);
     const baseScore = cleared * 120 * trial.combo;
     const now = Date.now();
     const echoBonus = trial.lastClearAt && now - trial.lastClearAt <= 3000 ? Math.round(baseScore * 0.2 * Math.min(5, trial.echoStacks + 1)) : 0;
     trial.echoStacks = echoBonus ? trial.echoStacks + 1 : 0;
+    if (echoBonus) trial.echoTriggers += 1;
     trial.lastClearAt = now;
     const abilityBonus = applyBlockAbility(cleared, clearedRows, baseScore);
-    trial.score += baseScore + echoBonus + abilityBonus;
+    let modeBonus = 0;
+    if (trial.mode === "precision" && (clearedRows.some((y) => y === trial.precisionMarker?.y) || pieceTouchesPrecision(trial.piece))) {
+      modeBonus += 260;
+      trial.precisionMarker = makePrecisionMarker();
+      addFloat("精准刻度+260", trial.cols * trial.cell / 2, 382, "#fff1a8", 16);
+    }
+    const zodiacBonus = zodiacScoreBonus(cleared, baseScore, priorLines);
+    const totalScore = baseScore + echoBonus + abilityBonus + modeBonus + zodiacBonus;
+    addRunScore(totalScore);
     trial.effects.clears.push(...clearedRows.map((y) => ({ y, age: 0, life: 300 })));
     spawnParticles(clearedRows, cells);
-    addFloat(`+${money(baseScore + echoBonus + abilityBonus)}`, trial.cols * trial.cell / 2, Math.max(56, Math.min(...clearedRows) * trial.cell), cleared >= 4 ? "#fff1a8" : "#f2c14e", cleared >= 4 ? 24 : 18);
+    addFloat(`+${money(totalScore)}`, trial.cols * trial.cell / 2, Math.max(56, Math.min(...clearedRows) * trial.cell), cleared >= 4 ? "#fff1a8" : "#f2c14e", cleared >= 4 ? 24 : 18);
     if (echoBonus) addFloat(`回响+${Math.min(5, trial.echoStacks) * 20}%`, trial.cols * trial.cell / 2, 272, "#f6d57b", 17);
-    if (trial.combo > 1) addFloat(`COMBO x${trial.combo}`, trial.cols * trial.cell / 2, 304, "#ffffff", 22);
+    if (trial.combo > 1) addFloat(`COMBO x${trial.combo}`, trial.cols * trial.cell / 2, 304, comboColor(trial.combo), comboSize(trial.combo));
     playClear(cleared);
     playCombo(trial.combo);
     shake(cleared >= 4 ? 3.4 : 1 + cleared * 0.45, 110 + cleared * 45);
     trial.grid = trial.grid.filter((row) => row.some((cell) => !cell));
     while (trial.grid.length < trial.rows) trial.grid.unshift(Array(trial.cols).fill(null));
+    if (trial.piece?.modifier === "rewind" && trial.history.length) {
+      setTimeout(() => {
+        const snapshot = trial.history[Math.min(2, trial.history.length - 1)];
+        if (!snapshot) return;
+        trial.grid = cloneGrid(snapshot.grid);
+        trial.piece = clonePiece(snapshot.piece);
+        trial.next = clonePiece(snapshot.next);
+        addFloat("时间倒流", trial.cols * trial.cell / 2, 408, "#d6f7ff", 20);
+        ensureRenderLoop();
+      }, 260);
+    }
+    if ((currentBeast() === "白虎" || currentZodiac() === "虎") && priorLines >= 0) {
+      addGarbageRow();
+      addFloat("白虎反击", trial.cols * trial.cell / 2, 434, "#ff9ab8", 17);
+    }
     while (trial.pendingGarbageRows > 0) {
       addGarbageRow();
       trial.pendingGarbageRows -= 1;
     }
+    maybeSpawnGoldFloat();
+    updateRewindPanel();
+    checkPathUnlocks();
   } else {
     trial.combo = 0;
     trial.echoStacks = 0;
   }
+}
+
+function comboColor(combo) {
+  if (combo >= 10) return "#ffffff";
+  if (combo >= 6) return "#fff1a8";
+  if (combo >= 3) return "#ffd45f";
+  return "#f2c14e";
+}
+
+function comboSize(combo) {
+  if (combo >= 10) return 40;
+  if (combo >= 6) return 32;
+  if (combo >= 3) return 24;
+  return 18;
 }
 
 function consumeShield() {
@@ -684,6 +1157,10 @@ function spawn() {
   trial.slowActive = trial.slowPieces > 0;
   if (trial.slowPieces > 0) trial.slowPieces -= 1;
   trial.dropElapsed = 0;
+  trial.lockElapsed = 0;
+  trial.landingY = null;
+  trial.touched = false;
+  drawNextPiece();
   if (collide(trial.piece)) {
     const saved = consumeShield();
     if (!saved || collide(trial.piece)) endTrial();
@@ -692,7 +1169,15 @@ function spawn() {
 
 function hardDrop() {
   if (!trial.running || !trial.piece) return;
-  while (!collide(trial.piece, 0, 1)) trial.piece.y += 1;
+  rememberStep("硬降前");
+  let distance = 0;
+  while (!collide(trial.piece, 0, 1)) {
+    trial.piece.y += 1;
+    distance += 1;
+  }
+  if (currentZodiac() === "兔") addRunScore(3 + distance * 3);
+  trial.hardDrops += 1;
+  trial.lockElapsed = 999;
   playSfx("hard_drop");
   shake(1.4, 90);
   drop();
@@ -700,6 +1185,7 @@ function hardDrop() {
 
 function holdPiece() {
   if (!trial.running || !trial.canHold) return;
+  rememberStep("暂存");
   const currentType = trial.piece.type;
   if (trial.hold) {
     trial.piece = makePiece(trial.hold);
@@ -709,6 +1195,8 @@ function holdPiece() {
     spawn();
   }
   trial.canHold = false;
+  trial.lockElapsed = 0;
+  drawNextPiece();
   playSfx("rotate", 0.75);
 }
 
@@ -716,11 +1204,44 @@ function drop() {
   if (!trial.running) return;
   if (!collide(trial.piece, 0, 1)) {
     trial.piece.y += 1;
+    trial.lockElapsed = 0;
+    trial.landingY = null;
   } else {
+    if (trial.piece.modifier === "pendulum" && !trial.piece.landingDelayUntil) {
+      trial.piece.landingDelayUntil = performance.now() + 1000;
+      addFloat("钟摆窗口", trial.cols * trial.cell / 2, 104, "#ffe08a", 17);
+      return;
+    }
+    if (trial.piece.modifier === "pendulum" && performance.now() < trial.piece.landingDelayUntil) {
+      swingPendulum();
+      return;
+    }
+    if (trial.lockElapsed < lockDelayMs()) {
+      trial.landingY = trial.piece.y;
+      return;
+    }
+    rememberStep(`落定 ${trial.piece.specialName || trial.piece.name}`);
     merge();
     playSfx("land");
     clearLines();
     spawn();
+  }
+}
+
+function lockDelayMs() {
+  if (trial.mode === "rhythm" && trial.rhythmBeat) return 220;
+  return currentBeast() === "青龙" ? 180 : 420;
+}
+
+function swingPendulum() {
+  const now = performance.now();
+  if (now - trial.piece.lastSwingAt < 180) return;
+  trial.piece.lastSwingAt = now;
+  if (!collide(trial.piece, trial.piece.swingDir, 0)) {
+    trial.piece.x += trial.piece.swingDir;
+  } else {
+    trial.piece.swingDir *= -1;
+    if (!collide(trial.piece, trial.piece.swingDir, 0)) trial.piece.x += trial.piece.swingDir;
   }
 }
 
@@ -741,6 +1262,8 @@ function animateTrial(now) {
   const delta = Math.min(80, now - (trial.lastFrame || now));
   trial.lastFrame = now;
   if (trial.running) {
+    updateModeClock(now);
+    if (trial.piece && collide(trial.piece, 0, 1)) trial.lockElapsed += delta;
     trial.dropElapsed += delta;
     const interval = trialDropInterval();
     while (trial.dropElapsed >= interval && trial.running) {
@@ -783,6 +1306,38 @@ function drawCell(ctx, x, y, block, options = {}) {
   ctx.fillText(block.glyph, left + trial.cell / 2, top + trial.cell / 2);
 }
 
+function drawMiniCell(ctx, x, y, block, size = 22) {
+  const left = x * size;
+  const top = y * size;
+  const gradient = ctx.createLinearGradient(left, top, left + size, top + size);
+  gradient.addColorStop(0, "#f4e4ba");
+  gradient.addColorStop(0.2, block.color);
+  gradient.addColorStop(1, "#111");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(left + 1, top + 1, size - 2, size - 2);
+  ctx.strokeStyle = "rgba(242,193,78,.3)";
+  ctx.strokeRect(left + 4, top + 4, size - 8, size - 8);
+  ctx.fillStyle = "rgba(8,8,8,.82)";
+  ctx.font = "700 11px serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(block.glyph, left + size / 2, top + size / 2);
+}
+
+function drawNextPiece() {
+  const canvas = $("#nextPiece");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!trial.next) return;
+  const size = 22;
+  const ox = Math.floor((5 - trial.next.matrix[0].length) / 2);
+  const oy = Math.floor((5 - trial.next.matrix.length) / 2);
+  trial.next.matrix.forEach((row, y) => row.forEach((value, x) => {
+    if (value) drawMiniCell(ctx, ox + x, oy + y, trial.next, size);
+  }));
+}
+
 function updateTrialEffects(delta) {
   const effects = trial.effects;
   effects.particles.forEach((item) => {
@@ -797,6 +1352,7 @@ function updateTrialEffects(delta) {
   });
   effects.ripples.forEach((item) => { item.age += delta; });
   effects.clears.forEach((item) => { item.age += delta; });
+  for (const mark of trial.engravingMarks.values()) mark.age += delta;
   effects.particles = effects.particles.filter((item) => item.age < item.life);
   effects.floats = effects.floats.filter((item) => item.age < item.life);
   effects.ripples = effects.ripples.filter((item) => item.age < item.life);
@@ -899,11 +1455,32 @@ function drawTrial(now = performance.now(), delta = 16) {
   for (let y = 1; y < trial.rows; y++) {
     ctx.beginPath(); ctx.moveTo(0, y * trial.cell); ctx.lineTo(cssWidth, y * trial.cell); ctx.stroke();
   }
+  drawEngravings(ctx);
+  if (trial.mode === "precision" && trial.precisionMarker) {
+    ctx.fillStyle = "rgba(242,193,78,.08)";
+    ctx.strokeStyle = "rgba(242,193,78,.62)";
+    ctx.lineWidth = 2;
+    ctx.fillRect(trial.precisionMarker.x * trial.cell + 4, trial.precisionMarker.y * trial.cell + 4, trial.cell - 8, trial.cell - 8);
+    ctx.strokeRect(trial.precisionMarker.x * trial.cell + 5, trial.precisionMarker.y * trial.cell + 5, trial.cell - 10, trial.cell - 10);
+  }
   trial.grid.forEach((row, y) => row.forEach((cell, x) => cell && drawCell(ctx, x, y, cell)));
   if (trial.piece) {
     const gy = ghostY(trial.piece);
     trial.piece.matrix.forEach((row, y) => row.forEach((value, x) => value && drawCell(ctx, trial.piece.x + x, gy + y, trial.piece, { ghost: true })));
     trial.piece.matrix.forEach((row, y) => row.forEach((value, x) => value && drawCell(ctx, trial.piece.x + x, trial.piece.y + y, trial.piece)));
+  }
+  if (trial.goldFloat && performance.now() - trial.goldFloat.bornAt <= trial.goldFloat.life) {
+    ctx.fillStyle = "#f2c14e";
+    ctx.beginPath();
+    ctx.arc((trial.goldFloat.x + 0.5) * trial.cell, (trial.goldFloat.y + 0.5) * trial.cell, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#241a04";
+    ctx.font = "700 12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`+${trial.goldFloat.value}`, (trial.goldFloat.x + 0.5) * trial.cell, (trial.goldFloat.y + 0.5) * trial.cell);
+  } else if (trial.goldFloat) {
+    trial.goldFloat = null;
   }
   drawTrialEffects(ctx);
   const danger = stackRatio();
@@ -919,22 +1496,31 @@ function drawTrial(now = performance.now(), delta = 16) {
     ctx.fillStyle = `rgba(255, 245, 194, ${Math.max(0, (trial.effects.flashUntil - now) / 130) * 0.32})`;
     ctx.fillRect(0, 0, cssWidth, cssHeight);
   }
+  if (trial.combo >= 10) {
+    ctx.fillStyle = "rgba(255,255,255,.08)";
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
+  }
   $("#trialScore").textContent = money(trial.score);
   $("#trialLines").textContent = money(trial.lines);
   $("#trialCombo").textContent = trial.combo;
   $("#holdPiece").textContent = trial.hold ? `${blockDefs[trial.hold].glyph}${trial.shields ? ` · 盾${trial.shields}` : ""}` : (trial.shields ? `盾${trial.shields}` : "--");
+  $("#trialModeText").textContent = modeNames[trial.mode] || modeNames.standard;
+  $("#trialTimer").textContent = trial.mode === "timed" ? `${Math.ceil(trial.modeRemaining)}s` : `${Math.floor((Date.now() - trial.startedAt) / 1000)}s`;
+  updateRewindPanel();
   updateTrialChrome();
 }
 
 async function endTrial() {
   trial.running = false;
+  recordFinishedRun();
   $("#startTrial").textContent = "再次试炼";
   playSfx("game_over");
-  addFloat("钟渊沉寂...", trial.cols * trial.cell / 2, trial.rows * trial.cell / 2, "#f6d57b", 24);
+  addFloat(hasRealm("wangshi") ? "你已留下回响" : "钟渊沉寂...", trial.cols * trial.cell / 2, trial.rows * trial.cell / 2, "#f6d57b", 24);
+  if (currentBeast() === "青龙") showCenterLine("青龙裁决：十日名录已刻入钟楼", "path");
   ensureRenderLoop();
   try {
     const duration = Math.round((Date.now() - trial.startedAt) / 1000);
-    const result = await post("/api/trials/report", { score: trial.score, lines: trial.lines, duration, mode: currentTrialMode(), specials: [] });
+    const result = await post("/api/trials/report", { score: trial.score, lines: trial.lines, duration, mode: currentTrialMode(), hardDrops: trial.hardDrops, specials: trial.specialCounts });
     toast(`试炼结束，获得 ${money(result.data.marksEarned)} 刻痕`);
     await load();
   } catch (error) {
@@ -945,6 +1531,7 @@ async function endTrial() {
 function startTrial() {
   ensureAudio();
   playSfx("whisper");
+  unlockRealm("wenzhong");
   pieceBag = [];
   trial.grid = emptyGrid();
   trial.piece = makePiece();
@@ -961,34 +1548,158 @@ function startTrial() {
   trial.pendingGarbageRows = 0;
   trial.lastClearAt = 0;
   trial.echoStacks = 0;
+  trial.echoTriggers = 0;
+  trial.zhongyuan = 0;
+  trial.history = [];
+  trial.mode = $("#trialMode")?.value || trial.mode || "standard";
+  localStorage.setItem("trialModeV2", trial.mode);
+  trial.modeRemaining = 60;
+  trial.modeStartedAt = Date.now();
+  trial.survivalStep = 0;
+  trial.rhythmBeat = false;
+  trial.precisionMarker = makePrecisionMarker();
+  trial.goldFloat = null;
+  trial.lockDelay = 0;
+  trial.lockElapsed = 0;
+  trial.landingY = null;
+  trial.nirvanaLines = 0;
+  trial.pendingWhispers = [];
+  trial.shownWhispers = new Set();
+  trial.engravingMarks = new Map();
+  trial.lastEngravings = new Map();
+  trial.specialCounts = [];
+  trial.hardDrops = 0;
   trial.effects = { particles: [], floats: [], ripples: [], clears: [], shakeUntil: 0, shakePower: 0, flashUntil: 0 };
   trial.startedAt = Date.now();
   trial.lastFrame = performance.now();
   trial.dropElapsed = 0;
   $("#startTrial").textContent = "试炼中";
+  drawNextPiece();
+  updateRewindPanel();
+  if (currentBeast()) {
+    showCenterLine(`${currentBeast()}降临`, "train");
+    playSfx("beast");
+  }
   ensureRenderLoop();
 }
 
+function updateModeClock(time) {
+  const elapsed = Math.max(0, (Date.now() - trial.startedAt) / 1000);
+  trial.modeRemaining = Math.max(0, 60 - elapsed);
+  trial.survivalStep = Math.floor(elapsed / 18);
+  trial.rhythmBeat = trial.mode === "rhythm" && Math.floor(time / 520) % 2 === 0;
+  $("#rhythmLight")?.classList.toggle("active", trial.rhythmBeat);
+  if (trial.mode === "timed" && trial.modeRemaining <= 0) endTrial();
+}
+
 function trialDropInterval() {
-  const zodiac = state?.v2?.cycle?.rulingZodiac;
-  const beast = state?.v2?.cycle?.activeBeastEvent;
+  const zodiac = currentZodiac();
+  const beast = currentBeast();
   let interval = 760;
   if (zodiac === "鼠") interval = 920;
   if (zodiac === "兔") interval = 500;
   if (zodiac === "牛") interval = 820;
+  if (zodiac === "鸡") interval = 560;
   if (beast === "玄武") interval = 620;
   if (beast === "青龙") interval = 460;
+  if (trial.mode === "survival" || beast === "玄武") interval -= trial.survivalStep * 55;
+  if (trial.mode === "timed") interval -= Math.floor((60 - trial.modeRemaining) / 10) * 35;
+  if (trial.mode === "rhythm" && trial.rhythmBeat) interval = Math.min(interval, 360);
   if (trial.slowActive) interval *= 1.65;
-  return interval;
+  return Math.max(240, interval);
 }
 
 function currentTrialMode() {
-  const beast = state?.v2?.cycle?.activeBeastEvent;
+  const beast = currentBeast();
   if (beast === "白虎") return "pvp";
   if (beast === "朱雀") return "nirvana";
   if (beast === "玄武") return "survival";
   if (beast === "青龙") return "pvp";
-  return "normal";
+  return trial.mode || "standard";
+}
+
+function movePiece(dir) {
+  if (!trial.running || !trial.piece) return false;
+  if (!collide(trial.piece, dir, 0)) {
+    rememberStep(dir < 0 ? "左移" : "右移");
+    trial.piece.x += dir;
+    trial.lockElapsed = 0;
+    playSfx("move");
+    ensureRenderLoop();
+    return true;
+  }
+  return false;
+}
+
+function rotatePiece() {
+  if (!trial.running || !trial.piece) return false;
+  const rotated = rotate(trial.piece.matrix);
+  for (const kick of [0, 1, -1, 2, -2]) {
+    if (!collide(trial.piece, kick, 0, rotated)) {
+      rememberStep("旋转");
+      trial.piece.x += kick;
+      trial.piece.matrix = rotated;
+      trial.lockElapsed = 0;
+      playSfx("rotate");
+      ensureRenderLoop();
+      return true;
+    }
+  }
+  return false;
+}
+
+function softDrop() {
+  if (!trial.running || !trial.piece) return;
+  drop();
+  addRunScore(1);
+  ensureRenderLoop();
+}
+
+function bindTouchControls() {
+  $$("[data-touch]").forEach((button) => button.addEventListener("click", () => {
+    const action = button.dataset.touch;
+    ensureAudio();
+    if (action === "left") movePiece(-1);
+    if (action === "right") movePiece(1);
+    if (action === "rotate") rotatePiece();
+    if (action === "drop") hardDrop();
+  }));
+  const board = $("#trialBoard");
+  if (!board) return;
+  let start = null;
+  let lastTap = 0;
+  board.addEventListener("touchstart", (event) => {
+    const touch = event.changedTouches[0];
+    start = { x: touch.clientX, y: touch.clientY, at: Date.now() };
+  }, { passive: true });
+  board.addEventListener("touchend", (event) => {
+    if (!start) return;
+    event.preventDefault();
+    ensureAudio();
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    const now = Date.now();
+    if (now - lastTap < 260 && Math.abs(dx) < 18 && Math.abs(dy) < 18) {
+      holdPiece();
+      lastTap = 0;
+      return;
+    }
+    lastTap = now;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 28) {
+      movePiece(dx < 0 ? -1 : 1);
+    } else if (dy < -28) {
+      rotatePiece();
+    } else if (dy > 28) {
+      hardDrop();
+    } else {
+      const rect = board.getBoundingClientRect();
+      const zone = (touch.clientX - rect.left) / rect.width;
+      if (zone < 0.33) movePiece(-1);
+      else if (zone > 0.66) movePiece(1);
+      else rotatePiece();
+    }
+  }, { passive: false });
 }
 
 function bindEvents() {
@@ -998,6 +1709,18 @@ function bindEvents() {
     renderTab();
   }));
   $("#audioToggle")?.addEventListener("click", toggleAudio);
+  $("#trialMode").value = trial.mode;
+  $("#trialMode").addEventListener("change", (event) => {
+    trial.mode = event.target.value;
+    localStorage.setItem("trialModeV2", trial.mode);
+    toast(`试炼模式切换为：${modeNames[trial.mode]}`);
+  });
+  $("#rewindBtn").addEventListener("click", () => restoreHistory(Number($("#rewindSelect").value || 0)));
+  $("#pathToggle").addEventListener("click", () => {
+    renderPathPanel();
+    $("#pathPanel").classList.add("open");
+  });
+  $("#pathClose").addEventListener("click", () => $("#pathPanel").classList.remove("open"));
   $("#authBtn").addEventListener("click", () => $("#authDialog").showModal());
   $("#authForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1025,33 +1748,17 @@ function bindEvents() {
     }
     if (!trial.running || !trial.piece) return;
     let changed = false;
-    if (event.key === "ArrowLeft" && !collide(trial.piece, -1, 0)) {
-      trial.piece.x -= 1;
-      playSfx("move");
-      changed = true;
-    }
-    if (event.key === "ArrowRight" && !collide(trial.piece, 1, 0)) {
-      trial.piece.x += 1;
-      playSfx("move");
-      changed = true;
-    }
-    if (event.key === "ArrowDown") {
-      drop();
-      trial.score += 1;
-      changed = true;
-    }
+    if (event.key === "ArrowLeft") changed = movePiece(-1);
+    if (event.key === "ArrowRight") changed = movePiece(1);
+    if (event.key === "ArrowDown") { softDrop(); changed = true; }
     if (event.key === " " || event.key === "Space" || event.key === "Spacebar") hardDrop();
-    if (event.key === "ArrowUp" || event.key === "z" || event.key === "Z") {
-      const rotated = rotate(trial.piece.matrix);
-      if (!collide(trial.piece, 0, 0, rotated)) {
-        trial.piece.matrix = rotated;
-        playSfx("rotate");
-        changed = true;
-      }
-    }
+    if (event.key === "ArrowUp" || event.key === "z" || event.key === "Z") changed = rotatePiece();
     if (event.key === "c" || event.key === "C") holdPiece();
     if (changed) ensureRenderLoop();
   }, { passive: false });
+  bindTouchControls();
+  renderPathPanel();
+  updateRewindPanel();
   setAudioButton();
 }
 
