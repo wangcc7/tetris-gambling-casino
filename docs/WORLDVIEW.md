@@ -91,5 +91,6 @@
 
 ---
 
-**版本**：V2.0 — 2026-06-02
+**版本**：V2.5 — 2026-06-02 | V5修复已落地（提交 442b96c）
 **关联设计文档**：[docs/DESIGN_V2.md](DESIGN_V2.md)
+**关联审查报告**：[docs/CODE_REVIEW_V5.md](CODE_REVIEW_V5.md)（已全部修复）

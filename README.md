@@ -1,31 +1,82 @@
-# 终焉钟城 V2
+# 终焉钟城 V2.5
 
-十日轮回主题的沉浸式网页游戏原型。玩家作为试炼者进入钟渊系统统治的时钟城市，在方块试炼中获得刻痕，在雾区交易所买卖终焉商品，在试炼契约中临时结盟，并通过规则之眼购买情报。
+> 十日轮回主题的沉浸式网页游戏。玩家被"钟渊系统"拉入一座无限轮回的时钟城市，在方块试炼中刻下钟痕，在雾区交易所买卖终焉商品，在试炼契约中临时结盟，通过规则之眼购买情报，在终焉列车的汽笛声中寻找出口。
 
-金币、股票、期货、公会等 V1 术语已废弃。V2 统一使用：刻痕、雾区商品、试炼契约、规则之眼、铭刻之书、终焉列车、生肖裁判、四象神兽。
+金币、股票、期货、公会等 V1 术语已废弃。当前统一使用：刻痕、雾区商品、试炼契约、规则之眼、铭刻之书、终焉列车、生肖裁判、四象神兽。
 
 ## 线上地址
 
 - 玩家端：[http://150.158.10.10:8080](http://150.158.10.10:8080)
 - 后台：[http://150.158.10.10:18052/admin](http://150.158.10.10:18052/admin)
-- 后台账号：`root`
-- 后台密码：`gambleMaster666`
+- 后台账号：`root` / 密码：`gambleMaster666`
 
-## V2 当前实现
+## 版本演进
 
-- 唯一入口 SPA：`public/index.html`
-- 三面板布局：左侧方块试炼，中部钟城广场，右侧铭刻之书，底部列车轨道
-- 方块试炼：10x20 棋盘，7 种终焉属性方块，支持方向键、旋转、硬降、暂存
-- 十日轮回：服务端动态计算周期、当日生肖、宣言、剩余时间和四象事件
-- 终焉列车：晨钟、正午、黄昏、午夜、终焉五班列车时刻表
-- 雾区交易所：每日生成 8-12 种商品，价格持续波动，可买入/卖出
-- 试炼契约：每日临时三人小队，可创建、加入、退出
-- 规则之眼：每日 6 张情报卡片，可购买并写入广播事件
-- 钟城广播：全城广播、钟城广场、契约频道等频道入口
-- 试炼者名录：当日刻痕、雾区、契约、十日总榜、神兽殿堂、生肖全图鉴
-- 铭刻之书：个人刻痕、消行、分数、雾区持仓、生肖/神兽印记、钟渊之路、铭刻升级
-- 后端 V2 API：周期、列车、试炼上报、雾区、契约、情报、广播、排行榜
-- Docker 部署：玩家端 `8080`，后台 `18052`
+| 版本 | 提交 | 摘要 |
+|---|---|---|
+| V2 | `4727f7a` | 十日轮回核心系统：SPA架构、方块试炼、雾区、契约、情报、列车 |
+| V4 | `8b5a691` | 试炼集成修复、生肖/神兽机制初步接入 |
+| V5 | `442b96c` | **游戏循环重连**：名录纯净化、雾区→试炼加成、情报效果验证、多语境NPC、BGM合成器、全城广播联动、每日结算持久化、雾区T+1预测、收集品解锁通知、跨系统三联回响、终焉之日视觉特效 |
+
+## 核心玩法系统（V5 修复后）
+
+### 方块试炼
+- 10×20 棋盘，7 种终焉属性方块，方向键/旋转/硬降/暂存
+- 四消触发全城广播 + 全屏闪光特效，combo≥5 涌动效果
+- 雾区持仓直接加成试炼刻痕（神兽遗物 +15-40%、生肖符咒 +15%、规则碎片 +8%、钟楼零件 +5%）
+- 情报效果验证：battle_hint 每次试炼 +15% 刻痕（3次充能），zodiac_hint +10%（3次充能），耗尽时推送闭环消息
+
+### 十日轮回与终焉列车
+- 十二生肖按日轮值，每日生成生肖宣言和规则偏向
+- 五班列车时刻：晨钟（发布生肖宣言）、正午、黄昏（情报投递）、午夜（雾区商品刷新+明日预测）、终焉（每日结算存档）
+- 第10天青龙裁决日全屏红脉特效
+- 第3/5/7/10天四象神兽降临（白虎PVP狂熱/朱雀涅槃/玄武护盾/青龙清算）
+
+### 雾区交易所
+- 5类商品（神兽遗物、生肖符咒、规则碎片、钟楼零件、列车遗落物），每日生成 8-12 种
+- 价格持续波动，买入/卖出赚取刻痕
+- 午夜列车刷新价格 + 生成 T+1 市场预测（涨跌方向）
+- 持仓直接加成方块试炼刻痕收益
+
+### 规则之眼（情报系统）
+- 每日 6 张情报卡片，6 种效果类型（battle_hint/zodiac_hint/price_leak/beast_warning/fog_insight/echo_recall）
+- 购买后效果实时生效，客户端显示具体效果描述
+- 情报耗尽时自动推送验证闭环消息
+
+### 试炼契约
+- 每日临时三人小队，可创建/加入/退出
+- 契约贡献受雾区加成影响
+
+### AI 驱动NPC生态
+- 多语境对话池：晨/午/暮/夜/终 + 神兽事件上下文
+- 自动闲聊按时间段和当前事件选择对话
+- 全城广播附带完整规则上下文（生肖、宣言、神兽事件）
+
+### 试炼者名录（排行榜）
+- 当日刻痕 / 雾区 / 契约 / 十日总榜 / 神兽殿堂 / 生肖全图鉴
+- 纯数据驱动，无硬编码NPC占位
+- 每日结算自动持久化到 `v2_daily_settlement` 表
+
+### 铭刻之书（个人面板）
+- 个人刻痕、消行、分数、雾区持仓及加成效果
+- 生肖/神兽印记收集，解锁时自动推送铭刻通知
+- 钟渊之路、铭刻升级
+
+### 实时视觉与音效
+- BGM：多层级 Web Audio 合成器（低音嗡鸣 + 钟楼滴答 + 16音旋律 + 和弦层），神兽日变奏，危险自适应
+- 四消：全屏闪光 + 汽笛声 + 中心大字 "四✨消✨！"
+- Combo≥5：combo-surge 涌动效果
+- 午夜列车：night-wave 深蓝波光
+- 终焉列车：finale-flash 金色闪屏
+- 终焉之日（第10天）：全屏红脉冲 + 试炼面板暗红光晕
+- 首页规则面板：实时显示今日生肖/神兽/雾区预测/试炼加成四维信息
+
+### 跨系统联动
+- 雾区×试炼：持仓直接转化试炼刻痕加成
+- 情报×试炼：情报充能消耗，每次试炼消耗1次
+- 四消×全城广播：maxClear≥4 触发钟楼公告
+- 雾区×情报×四消三重触发："三联回响"全城公告
+- 午夜列车×雾区预测：T+1 市场方向预判
 
 ## 项目结构
 
@@ -35,67 +86,90 @@
 ├── docker-compose.yml
 ├── package.json
 ├── public
-│   ├── index.html          # V2 SPA 主入口
+│   ├── index.html          # V2 SPA 主入口（含规则面板）
 │   ├── js
-│   │   └── v2-main.js      # V2 SPA 状态、UI、方块试炼
-│   ├── styles.css          # 旧样式 + V2 三面板样式
-│   └── *.html              # V1 兼容页面，入口已不再使用
+│   │   └── v2-main.js      # SPA 状态管理、UI渲染、方块引擎、BGM合成器
+│   ├── styles.css          # 全局样式 + V2面板 + V5视觉特效
+│   └── *.html              # V1 兼容页面（已废弃）
 ├── server
-│   └── index.js            # HTTP、MySQL、V2 API、定时事件
+│   └── index.js            # HTTP/WebSocket/MySQL/V2 API/定时事件/NPC系统
 └── docs
-    ├── DESIGN_V2.md        # V2 权威设计文档
-    └── WORLDVIEW.md        # V2 世界观与文案约束
+    ├── DESIGN_V2.md        # V2.0 权威设计文档
+    ├── WORLDVIEW.md        # 世界观与叙事设定
+    ├── CODE_REVIEW_V2.md   # V2 代码审查
+    ├── CODE_REVIEW_V3_FUN.md # V3 趣味性审查
+    ├── CODE_REVIEW_V4.md   # V4 代码审查
+    └── CODE_REVIEW_V5.md   # V5 游戏循环断裂审查（已修复）
 ```
 
-## V2 API 摘要
+## API 摘要
 
 ```text
-GET  /api/cycle/current
-GET  /api/cycle/trains
-POST /api/trials/report
-GET  /api/player/profile
-POST /api/player/engrave
-GET  /api/fog/goods
-POST /api/fog/buy
-POST /api/fog/sell
-GET  /api/pact/available
-POST /api/pact/create
-POST /api/pact/join
-GET  /api/oracle/cards
-POST /api/oracle/buy
-GET  /api/rankings/:category
-GET  /api/broadcast/messages
-POST /api/broadcast/send
+周期与列车
+  GET  /api/cycle/current         当前周期状态（生肖、宣言、剩余时间）
+  GET  /api/cycle/trains          列车时刻表
+
+试炼
+  POST /api/trials/report         上报试炼结果（分数/消行/四消/雾区加成/情报消耗）
+
+玩家
+  GET  /api/player/profile        玩家档案
+  POST /api/player/engrave        铭刻升级
+
+雾区
+  GET  /api/fog/goods             雾区商品列表（含T+1预测）
+  POST /api/fog/buy               买入商品
+  POST /api/fog/sell              卖出商品
+
+契约
+  GET  /api/pact/available        可用契约
+  POST /api/pact/create           创建契约
+  POST /api/pact/join             加入契约
+
+情报
+  GET  /api/oracle/cards          今日情报卡片
+  POST /api/oracle/buy            购买情报
+
+排行与广播
+  GET  /api/rankings/:category    排行榜（daily_marks/fog/pact/cycle_total/beast_hall/zodiac_atlas）
+  GET  /api/broadcast/messages    广播消息
+  POST /api/broadcast/send        发送广播
 ```
 
-## 本地说明
+## 数据库表（V5新增）
+
+| 表名 | 用途 |
+|---|---|
+| `v2_players` | 玩家档案（刻痕/消行/生肖印记/神兽印记/情报充能） |
+| `v2_fog_goods` | 雾区商品定义（类别/基价/当前价/历史价格） |
+| `v2_fog_holdings` | 玩家雾区持仓 |
+| `v2_pacts` | 试炼契约（创建者/成员/目标刻痕） |
+| `v2_oracle_cards` | 情报卡片（名称/效果/价格/已售标记） |
+| `v2_daily_settlement` | **V5新增** 每日结算持久化（刻痕/消行/排名/神兽积分） |
+
+## 本地开发说明
 
 本地只做代码编辑和 Git 版本管理，不在本地调试。调试统一部署到 `150.158.10.10` 后进行。
 
 ## 服务器部署
 
-项目部署目录：
+项目部署目录：`/opt/tetris-gambling-casino`
 
 ```bash
-/opt/tetris-gambling-casino
-```
+# 拉取最新代码
+git pull origin main
 
-部署命令：
-
-```bash
+# 重新构建并启动
 docker-compose up -d --build
-```
 
-查看日志：
-
-```bash
+# 查看日志
 docker logs --tail=100 tetris-gambling-casino
 ```
 
 ## 后续路线
 
-1. 将 V2 雾区、契约、情报、铭刻升级从内存/兼容表迁移到独立 MySQL 表。
-2. 加 WebSocket，把广播、列车、雾区价格、排行榜实时推送到 SPA。
-3. 按 `docs/DESIGN_V2.md` 拆分 `server/index.js` 为 controllers/services/models。
-4. 把方块试炼拆成 `js/tetris/*` 模块，并补 PVP、玄武生存、朱雀涅槃模式。
-5. 为列车进站、生肖更替、四象神兽降临加入音效和全屏动画。
+1. WebSocket 实时推送：广播、列车、雾区价格、排行榜 → 替换当前轮询
+2. 按 `docs/DESIGN_V2.md` 拆分 `server/index.js` 为 controllers/services/models
+3. 方块试炼模块化拆分 + PVP/玄武生存/朱雀涅槃完整模式
+4. 粒子特效 + 屏幕震动参数调优 + 收集品已解锁卡片展示
+5. 雾区/契约/铭刻升级数据从内存迁移到独立 MySQL 表
