@@ -1909,7 +1909,7 @@ function startTrial() {
   trial.lastEngravings = new Map();
   trial.specialCounts = [];
   trial.hardDrops = 0;
-  trial.effects = { particles: [], floats: [], ripples: [], clears: [], shakeUntil: 0, shakePower: 0, flashUntil: 0 };
+  trial.effects = { particles: [], floats: [], ripples: [], clears: [], sparkles: [], shakeUntil: 0, shakePower: 0, flashUntil: 0, pulsing: false, pulseUntil: 0 };
   trial.startedAt = Date.now();
   trial.lastFrame = performance.now();
   trial.dropElapsed = 0;
