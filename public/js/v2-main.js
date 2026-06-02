@@ -5,6 +5,8 @@ let state = null;
 let activeTab = "broadcast";
 let clockBase = 0;
 let clockSyncedAt = 0;
+let ws = null;
+let pollTimer = null;
 
 const shapes = {
   I: [[1, 1, 1, 1]],
@@ -54,7 +56,7 @@ function escapeHtml(text) {
 }
 
 function money(value) {
-  return Math.round(Number(value || 0)).toLocaleString("zh-CN");
+  return Math.round(Number(value) || 0).toLocaleString("zh-CN");
 }
 
 function getSession() {
@@ -108,11 +110,58 @@ function currentServerTime() {
 }
 
 async function load() {
+  if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
   const session = getSession();
   state = await api(`/api/state${session.token ? `?sessionToken=${encodeURIComponent(session.token)}` : ""}`);
   clockBase = new Date(state.serverTime).getTime();
   clockSyncedAt = Date.now();
   renderAll();
+  connectWS();
+}
+
+function connectWS() {
+  if (ws && [WebSocket.OPEN, WebSocket.CONNECTING].includes(ws.readyState)) return;
+  const session = getSession();
+  const protocol = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${protocol}://${location.host}/ws${session.token ? `?token=${encodeURIComponent(session.token)}` : ""}`);
+  ws.addEventListener("message", (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === "init" && message.payload?.state) {
+      state = message.payload.state;
+      clockBase = new Date(state.serverTime).getTime();
+      clockSyncedAt = Date.now();
+      renderAll();
+    }
+    if (!state) return;
+    if (["chat", "npc_speak", "train"].includes(message.type) && message.payload) {
+      state.messages.unshift(message.payload);
+      state.messages = state.messages.slice(0, 80);
+      $("#railBroadcast").textContent = `${message.payload.author}：${message.payload.text}`;
+      if (activeTab === "broadcast") renderBroadcast();
+    }
+    if (message.type === "fog_price" && Array.isArray(message.payload)) {
+      message.payload.forEach((item) => {
+        const goods = state.v2.fogGoods.find((entry) => entry.id === item.goodsId);
+        if (goods) {
+          goods.currentPrice = item.newPrice;
+          goods.trend = item.trend;
+        }
+      });
+      if (activeTab === "fog") renderFog();
+    }
+    if (message.type === "pact_update" && message.payload?.pact) {
+      const index = state.v2.pacts.findIndex((item) => item.id === message.payload.pact.id);
+      if (index >= 0) state.v2.pacts[index] = message.payload.pact;
+      else state.v2.pacts.unshift(message.payload.pact);
+      if (activeTab === "pact") renderPact();
+    }
+    if (message.type === "oracle_new" && message.payload?.cards) {
+      state.v2.oracleCards = message.payload.cards;
+      if (activeTab === "oracle") renderOracle();
+    }
+    if (message.type === "settlement") toast("终焉列车结算预告已发布");
+  });
+  ws.addEventListener("close", () => setTimeout(connectWS, 2000));
 }
 
 function renderAll() {
@@ -395,14 +444,24 @@ function drawCell(ctx, x, y, block) {
 function drawTrial() {
   const canvas = $("#trialBoard");
   const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = trial.cols * trial.cell;
+  const cssHeight = trial.rows * trial.cell;
+  if (canvas.width !== cssWidth * dpr || canvas.height !== cssHeight * dpr) {
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#080808";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
   ctx.strokeStyle = "rgba(139,115,85,.22)";
   for (let x = 1; x < trial.cols; x++) {
-    ctx.beginPath(); ctx.moveTo(x * trial.cell, 0); ctx.lineTo(x * trial.cell, canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x * trial.cell, 0); ctx.lineTo(x * trial.cell, cssHeight); ctx.stroke();
   }
   for (let y = 1; y < trial.rows; y++) {
-    ctx.beginPath(); ctx.moveTo(0, y * trial.cell); ctx.lineTo(canvas.width, y * trial.cell); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y * trial.cell); ctx.lineTo(cssWidth, y * trial.cell); ctx.stroke();
   }
   trial.grid.forEach((row, y) => row.forEach((cell, x) => cell && drawCell(ctx, x, y, cell)));
   if (trial.piece) trial.piece.matrix.forEach((row, y) => row.forEach((value, x) => value && drawCell(ctx, trial.piece.x + x, trial.piece.y + y, trial.piece)));
@@ -419,7 +478,7 @@ async function endTrial() {
   drawTrial();
   try {
     const duration = Math.round((Date.now() - trial.startedAt) / 1000);
-    const result = await post("/api/trials/report", { score: trial.score, lines: trial.lines, duration, mode: "normal", specials: [] });
+    const result = await post("/api/trials/report", { score: trial.score, lines: trial.lines, duration, mode: currentTrialMode(), specials: [] });
     toast(`试炼结束，获得 ${money(result.data.marksEarned)} 刻痕`);
     await load();
   } catch (error) {
@@ -439,9 +498,30 @@ function startTrial() {
   trial.combo = 0;
   trial.startedAt = Date.now();
   clearInterval(trial.timer);
-  trial.timer = setInterval(drop, 760);
+  trial.timer = setInterval(drop, trialDropInterval());
   $("#startTrial").textContent = "试炼中";
   drawTrial();
+}
+
+function trialDropInterval() {
+  const zodiac = state?.v2?.cycle?.rulingZodiac;
+  const beast = state?.v2?.cycle?.activeBeastEvent;
+  let interval = 760;
+  if (zodiac === "鼠") interval = 920;
+  if (zodiac === "兔") interval = 500;
+  if (zodiac === "牛") interval = 820;
+  if (beast === "玄武") interval = 620;
+  if (beast === "青龙") interval = 460;
+  return interval;
+}
+
+function currentTrialMode() {
+  const beast = state?.v2?.cycle?.activeBeastEvent;
+  if (beast === "白虎") return "pvp";
+  if (beast === "朱雀") return "nirvana";
+  if (beast === "玄武") return "survival";
+  if (beast === "青龙") return "pvp";
+  return "normal";
 }
 
 function bindEvents() {
@@ -488,5 +568,5 @@ function bindEvents() {
 bindEvents();
 drawTrial();
 load().catch((error) => toast(error.message));
-setInterval(load, 3500);
+pollTimer = setInterval(() => load().catch((error) => toast(error.message)), 30000);
 setInterval(tickClock, 1000);

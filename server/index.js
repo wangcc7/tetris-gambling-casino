@@ -14,6 +14,7 @@ const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
 const adminPassword = process.env.ADMIN_PASSWORD || "gambleMaster666";
 const appVersion = process.env.APP_VERSION || "0.7.0-v2";
+const enableV1Jobs = process.env.ENABLE_V1_JOBS === "1";
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",
   port: Number(process.env.DB_PORT || 3306),
@@ -1364,6 +1365,51 @@ async function moveFogMarket() {
   if (changed.length) wsBroadcast("fog_price", changed);
 }
 
+async function checkTrainArrivals() {
+  const { trains, cycle } = ensureV2State();
+  const now = Date.now();
+  state.v2.triggeredTrains ||= {};
+  for (const train of trains) {
+    const key = `${state.v2.dayKey}-${train.name}`;
+    const at = new Date(train.at).getTime();
+    if (state.v2.triggeredTrains[key] || now < at || now - at > 70000) continue;
+    state.v2.triggeredTrains[key] = true;
+    await onTrainArrive(train, cycle);
+  }
+}
+
+async function onTrainArrive(train, cycle) {
+  const text = `【${train.name}进站】${cycle.rulingZodiac}·${cycle.zodiacCode}：${cycle.title}。${train.effect}`;
+  state.v2.trainLog.unshift({ at: new Date().toISOString(), title: train.name, text });
+  state.v2.trainLog = state.v2.trainLog.slice(0, 20);
+  pushMessage("终焉列车", `"呜——呜——" ${text}`, "train", "全城广播");
+  if (train.name === "正午列车") {
+    for (const goods of state.v2.fogGoods) {
+      goods.currentPrice = Math.max(20, Math.round(goods.currentPrice * (0.86 + Math.random() * 0.34)));
+      goods.trend = "volatile";
+      await persistFogGoods(goods);
+    }
+    wsBroadcast("fog_price", state.v2.fogGoods.map((goods) => ({ goodsId: goods.id, name: goods.name, newPrice: goods.currentPrice, trend: goods.trend })));
+  }
+  if (train.name === "黄昏列车") {
+    state.v2.oracleCards = generateOracleCards(cycle);
+    if (dbReady) {
+      await db.query("DELETE FROM v2_oracle_cards WHERE day_key=?", [state.v2.dayKey]);
+      for (const card of state.v2.oracleCards) await persistOracleCard(card);
+    }
+    wsBroadcast("oracle_new", { cards: state.v2.oracleCards });
+  }
+  if (train.name === "午夜列车") {
+    for (const goods of state.v2.fogGoods) {
+      goods.currentPrice = Math.max(20, Math.round(goods.basePrice * (0.8 + Math.random() * 0.45)));
+      goods.trend = "volatile";
+      await persistFogGoods(goods);
+    }
+    wsBroadcast("fog_new_goods", { goods: state.v2.fogGoods });
+  }
+  if (train.name === "终焉列车") wsBroadcast("settlement", { type: "daily_preview", cycle, ranking: rankingsV2().daily_marks.slice(0, 10) });
+}
+
 function triggerWorldEvent() {
   const events = [
     ["牛市方块", "全服在线玩家 +50 金币", () => Object.values(state.players).forEach((p) => { p.coins += 50; })],
@@ -2108,7 +2154,7 @@ function initWebSocket(server) {
 
 loadPersistedState();
 connectMysql();
-refreshExternalData();
+if (enableV1Jobs) refreshExternalData();
 
 const playerServer = http.createServer((req, res) => {
   if (req.url.startsWith("/api/")) return api(req, res);
@@ -2125,16 +2171,19 @@ http.createServer((req, res) => {
   console.log(`Admin app listening on ${adminPort}`);
 });
 
-setInterval(moveMarket, 4000);
+if (enableV1Jobs) setInterval(moveMarket, 4000);
 setInterval(moveFogMarket, 7000);
+setInterval(checkTrainArrivals, 15000);
 setInterval(() => {
   const npc = v2Npcs[Math.floor(Math.random() * v2Npcs.length)];
   pushMessage(npc.name, npc.line, "npc", ["地虎", "青龙", "楚天秋", "列车长"].includes(npc.name) ? "全城广播" : "钟城广场");
 }, 9000);
-setInterval(() => {
-  if (Date.now() >= state.flags.nextEventAt) triggerWorldEvent();
-}, 1000);
-setInterval(refreshExternalData, 5 * 60 * 1000);
+if (enableV1Jobs) {
+  setInterval(() => {
+    if (Date.now() >= state.flags.nextEventAt) triggerWorldEvent();
+  }, 1000);
+}
+if (enableV1Jobs) setInterval(refreshExternalData, 5 * 60 * 1000);
 setInterval(saveState, 5000);
 
 if (state.messages.length === 0) {
