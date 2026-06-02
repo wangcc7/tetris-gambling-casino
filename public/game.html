@@ -62,7 +62,10 @@
               <select id="rewindSelect" aria-label="回溯状态"><option>暂无可回溯状态</option></select>
               <button id="rewindBtn" disabled>回溯</button>
             </div>
-            <div class="next-box"><span>下一块</span><canvas id="next" width="120" height="120"></canvas></div>
+            <div class="piece-preview-row">
+              <div class="next-box"><span>暂存 C</span><canvas id="hold" width="120" height="120"></canvas></div>
+              <div class="next-box"><span>下一块</span><canvas id="next" width="120" height="120"></canvas></div>
+            </div>
             <div class="actions"><button id="startBtn">开始</button><button id="pauseBtn">暂停</button><button id="restartBtn">重开</button></div>
             <div class="legend"><b>I 钟鸣</b><b>O 守命</b><b>T 谜局</b><b>L 筹码</b><b>J 止时</b><b>S 雾毒</b><b>Z 终焉</b><b>返 回溯</b><b>摆 钟摆</b><b>禁 诅咒</b></div>
           </aside>

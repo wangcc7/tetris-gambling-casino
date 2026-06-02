@@ -56,7 +56,7 @@
 .v2-header {
   grid-area: header;
   display: grid;
-  grid-template-columns: auto minmax(260px, 1fr) auto auto;
+  grid-template-columns: auto minmax(260px, 1fr) auto auto auto;
   gap: 14px;
   align-items: center;
   padding: 8px 14px;
@@ -210,6 +210,34 @@
   border: 1px solid rgba(184, 134, 11, .55);
   background: #080808;
   box-shadow: inset 0 0 22px rgba(0, 0, 0, .72), 0 0 22px rgba(184, 134, 11, .15);
+  transition: border-color .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+#trialBoard.trial-danger {
+  border-color: rgba(139, 34, 82, .86);
+  box-shadow: inset 0 0 28px rgba(139, 34, 82, .24), 0 0 26px rgba(139, 34, 82, .3);
+}
+
+#trialBoard.trial-critical {
+  filter: saturate(1.2);
+  animation: trial-breathe .72s ease-in-out infinite alternate;
+}
+
+.audio-toggle {
+  min-width: 58px;
+  color: var(--color-text-secondary);
+}
+
+.audio-toggle.active {
+  color: #101011;
+  border-color: var(--color-accent-brass);
+  background: linear-gradient(180deg, #e3c36d, #9b6f18);
+}
+
+#trialCombo.combo-pop {
+  display: inline-block;
+  color: #fff1a8;
+  animation: combo-pop .36s ease both;
 }
 
 .trial-stats {
@@ -595,6 +623,17 @@ body::after {
 
 @keyframes clock-hand {
   to { transform: rotate(360deg); }
+}
+
+@keyframes combo-pop {
+  0% { transform: scale(1); text-shadow: none; }
+  45% { transform: scale(1.32); text-shadow: 0 0 16px rgba(242, 193, 78, .75); }
+  100% { transform: scale(1); text-shadow: 0 0 6px rgba(242, 193, 78, .36); }
+}
+
+@keyframes trial-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.012); }
 }
 
 .game-header {
@@ -1476,6 +1515,16 @@ h2 {
   gap: 8px;
 }
 
+.piece-preview-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.piece-preview-row .next-box {
+  margin: 10px 0 0;
+}
+
 .time-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1547,7 +1596,8 @@ h2 {
   filter: grayscale(.5);
 }
 
-#next {
+#next,
+#hold {
   width: 110px;
   height: 110px;
 }

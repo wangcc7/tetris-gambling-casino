@@ -13,7 +13,7 @@ const playerPort = Number(process.env.PLAYER_PORT || 8080);
 const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
 const adminPassword = process.env.ADMIN_PASSWORD || "gambleMaster666";
-const appVersion = process.env.APP_VERSION || "0.7.0-v2";
+const appVersion = process.env.APP_VERSION || "0.7.1-fun";
 const enableV1Jobs = process.env.ENABLE_V1_JOBS === "1";
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",

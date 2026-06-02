@@ -2,6 +2,8 @@ const boardCanvas = document.querySelector("#board");
 const boardCtx = boardCanvas.getContext("2d");
 const nextCanvas = document.querySelector("#next");
 const nextCtx = nextCanvas.getContext("2d");
+const holdCanvas = document.querySelector("#hold");
+const holdCtx = holdCanvas?.getContext("2d");
 const cell = 30;
 const cols = 10;
 const rows = 20;
@@ -57,8 +59,11 @@ const pathRealms = [
 ];
 
 let grid = emptyGrid();
+let pieceBag = [];
 let current = makePiece();
 let next = makePiece();
+let hold = null;
+let canHold = true;
 let running = false;
 let paused = false;
 let last = 0;
@@ -97,7 +102,7 @@ let echoFloats = [];
 let runEchoTriggers = 0;
 let tideWhisperShown = false;
 let pathState = loadPathState();
-const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"]);
+const controlKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space", "KeyC", "c", "C"]);
 
 const finaleLines = [
   "你听见的不是钟声，是选择回到因果里的声音。",
@@ -253,9 +258,21 @@ function maybeSpecialModifier(forceType) {
   return keys[Math.floor(Math.random() * keys.length)];
 }
 
+function refillPieceBag() {
+  pieceBag = Object.keys(shapes);
+  for (let i = pieceBag.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pieceBag[i], pieceBag[j]] = [pieceBag[j], pieceBag[i]];
+  }
+}
+
+function takePieceType() {
+  if (!pieceBag.length) refillPieceBag();
+  return pieceBag.pop();
+}
+
 function makePiece(forceType) {
-  const keys = Object.keys(shapes);
-  const type = forceType || keys[Math.floor(Math.random() * keys.length)];
+  const type = forceType || takePieceType();
   const modifier = maybeSpecialModifier(forceType);
   const special = modifier ? specialModifiers[modifier] : null;
   return {
@@ -293,6 +310,8 @@ function rememberStep(reason) {
     grid: cloneGrid(grid),
     current: clonePiece(current),
     next: clonePiece(next),
+    hold: hold ? clonePiece(hold) : null,
+    canHold,
     goldFloat: goldFloat ? { ...goldFloat } : null,
     dying,
     dyingLocks,
@@ -313,6 +332,8 @@ function restoreHistory(index = 0, keepReward = true) {
   grid = cloneGrid(snapshot.grid);
   current = clonePiece(snapshot.current);
   next = clonePiece(snapshot.next);
+  hold = snapshot.hold ? clonePiece(snapshot.hold) : null;
+  canHold = snapshot.canHold ?? true;
   goldFloat = snapshot.goldFloat ? { ...snapshot.goldFloat } : null;
   dying = snapshot.dying;
   dyingLocks = snapshot.dyingLocks;
@@ -320,6 +341,7 @@ function restoreHistory(index = 0, keepReward = true) {
   precisionBonus = snapshot.precisionBonus;
   if (keepReward) localPlayer = playerNow;
   drawNext();
+  drawHold();
   syncHud();
   toast(`回溯到 ${snapshot.at} · ${snapshot.reason}`);
   return true;
@@ -646,6 +668,7 @@ function clearLines(tag) {
 function nextPiece() {
   current = next;
   next = makePiece();
+  canHold = true;
   if (collide(current)) {
     if (localPlayer.shields > 0) {
       localPlayer.shields -= 1;
@@ -664,6 +687,7 @@ function nextPiece() {
     }
   }
   drawNext();
+  drawHold();
 }
 
 function drop() {
@@ -686,6 +710,7 @@ function drop() {
     }
   }
   rememberStep(`落定 ${current.specialName || attrs[current.type].label}`);
+  playBell("land");
   merge(current);
   if (current.tag === "shield") {
     localPlayer.shields += 1;
@@ -736,14 +761,56 @@ function endGame(reason) {
 function hardDrop() {
   rememberStep("硬降前");
   while (!collide(current, 0, 1)) current.y++;
+  playBell("hard");
   drop();
   draw();
+}
+
+function holdCurrentPiece() {
+  if (!running || paused || !canHold) return;
+  rememberStep("暂存");
+  const currentType = current.type;
+  if (hold) {
+    current = makePiece(hold.type);
+    hold = makePiece(currentType);
+  } else {
+    hold = makePiece(currentType);
+    current = next;
+    next = makePiece();
+  }
+  current.x = Math.floor(cols / 2) - 2;
+  current.y = 0;
+  canHold = false;
+  playBell("hold");
+  drawNext();
+  drawHold();
+  syncHud();
 }
 
 function addGarbageLine() {
   const hole = Math.floor(Math.random() * cols);
   grid.shift();
   grid.push(Array.from({ length: cols }, (_, index) => index === hole ? null : { color: "#5f2633", label: "尘", tag: "garbage" }));
+}
+
+function ghostY(piece) {
+  const ghost = clonePiece(piece);
+  while (!collide(ghost, 0, 1)) ghost.y++;
+  return ghost.y;
+}
+
+function drawGhostCell(ctx, x, y, block, size = cell) {
+  const left = x * size;
+  const top = y * size;
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  ctx.strokeStyle = block.color;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(left + 4, top + 4, size - 8, size - 8);
+  ctx.beginPath();
+  ctx.arc(left + size / 2, top + size / 2, size * 0.28, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawCell(ctx, x, y, block, size = cell) {
@@ -805,6 +872,10 @@ function draw() {
   drawEngravings();
   grid.forEach((row, y) => row.forEach((block, x) => block && drawCell(boardCtx, x, y, block)));
   if (gameMode === "precision") drawPrecisionMarker();
+  const landingY = ghostY(current);
+  current.matrix.forEach((row, y) => row.forEach((value, x) => {
+    if (value) drawGhostCell(boardCtx, current.x + x, landingY + y, current);
+  }));
   current.matrix.forEach((row, y) => row.forEach((value, x) => {
     if (value) drawCell(boardCtx, current.x + x, current.y + y, current);
   }));
@@ -853,6 +924,18 @@ function drawNext() {
   }));
 }
 
+function drawHold() {
+  if (!holdCtx || !holdCanvas) return;
+  holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+  if (!hold) return;
+  const size = 24;
+  const ox = Math.floor((5 - hold.matrix[0].length) / 2);
+  const oy = Math.floor((5 - hold.matrix.length) / 2);
+  hold.matrix.forEach((row, y) => row.forEach((value, x) => {
+    if (value) drawCell(holdCtx, ox + x, oy + y, hold, size);
+  }));
+}
+
 function update(time = 0) {
   const delta = time - last;
   last = time;
@@ -894,7 +977,10 @@ function currentDropInterval() {
 
 function move(dir) {
   rememberStep(dir < 0 ? "左移" : "右移");
-  if (!collide(current, dir, 0)) current.x += dir;
+  if (!collide(current, dir, 0)) {
+    current.x += dir;
+    playBell("move");
+  }
 }
 
 function rotateCurrent() {
@@ -902,12 +988,15 @@ function rotateCurrent() {
   const rotated = rotate(current.matrix);
   if (!collide(current, 0, 0, rotated)) {
     current.matrix = rotated;
+    playBell("rotate");
   } else if (!collide(current, 1, 0, rotated)) {
     current.x++;
     current.matrix = rotated;
+    playBell("rotate");
   } else if (!collide(current, -1, 0, rotated)) {
     current.x--;
     current.matrix = rotated;
+    playBell("rotate");
   }
 }
 
@@ -917,9 +1006,12 @@ function resetGame(startNow = false, forceType = null) {
   document.querySelector("#endOverlay")?.classList.add("hidden");
   document.body.classList.remove("finale-awake");
   window.speechSynthesis?.cancel();
+  pieceBag = [];
   grid = emptyGrid();
   current = makePiece(forceType);
   next = makePiece();
+  hold = null;
+  canHold = true;
   running = startNow;
   paused = false;
   gameOver = false;
@@ -951,6 +1043,7 @@ function resetGame(startNow = false, forceType = null) {
   modeStartedAt = startNow ? Date.now() : 0;
   dropCounter = 0;
   drawNext();
+  drawHold();
   renderHistory();
   syncHud();
   toast(startNow ? "方块战场已开局" : "点击开始，进入钟渊试炼");
@@ -1080,10 +1173,10 @@ function ensureFx() {
   return fxContext;
 }
 
-function ring(ctx, freq, when, duration, gainValue) {
+function ring(ctx, freq, when, duration, gainValue, type = "sine") {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = "sine";
+  osc.type = type;
   osc.frequency.setValueAtTime(freq, when);
   gain.gain.setValueAtTime(0.0001, when);
   gain.gain.exponentialRampToValueAtTime(gainValue, when + 0.02);
@@ -1116,6 +1209,19 @@ function playBell(kind, cleared = 1) {
   } else if (kind === "path") {
     ring(ctx, 523.25, now, 0.8, 0.06);
     ring(ctx, 1046.5, now + 0.08, 0.7, 0.035);
+  } else if (kind === "move") {
+    ring(ctx, 176, now, 0.045, 0.015, "square");
+  } else if (kind === "rotate") {
+    ring(ctx, 277, now, 0.055, 0.022, "triangle");
+    ring(ctx, 370, now + 0.025, 0.055, 0.015, "triangle");
+  } else if (kind === "hard") {
+    ring(ctx, 82, now, 0.18, 0.07, "sawtooth");
+    ring(ctx, 55, now + 0.04, 0.18, 0.045, "triangle");
+  } else if (kind === "land") {
+    ring(ctx, 110, now, 0.13, 0.035);
+  } else if (kind === "hold") {
+    ring(ctx, 392, now, 0.1, 0.03, "triangle");
+    ring(ctx, 523.25, now + 0.05, 0.12, 0.022, "triangle");
   }
 }
 
@@ -1176,6 +1282,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowRight") move(1);
   if (event.key === "ArrowDown") drop();
   if (event.key === "ArrowUp") rotateCurrent();
+  if (event.key === "c" || event.key === "C" || event.code === "KeyC") holdCurrentPiece();
   if (event.code === "Space") {
     hardDrop();
   }
