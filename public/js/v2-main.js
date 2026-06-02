@@ -88,6 +88,7 @@ const trial = {
   echoStacks: 0,
   echoTriggers: 0,
   zhongyuan: 0,
+  maxClear: 0,
   history: [],
   mode: localStorage.getItem("trialModeV2") || "standard",
   modeRemaining: 60,
@@ -320,7 +321,12 @@ function formatTime(ms) {
 
 function ensureAudio(startAmbience = true) {
   if (audioState.muted) return null;
-  if (!audioState.ctx) audioState.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioState.ctx) {
+    audioState.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    audioState.ctx.onstatechange = () => {
+      if (audioState.ctx?.state === "running" && !audioState.bgmStarted && !audioState.muted) startBgm();
+    };
+  }
   if (audioState.ctx.state === "suspended") audioState.ctx.resume();
   if (startAmbience && !audioState.bgmStarted) startBgm();
   return audioState.ctx;
@@ -398,17 +404,73 @@ function startBgm() {
   const ctx = ensureAudio(false);
   if (!ctx || audioState.bgmStarted) return;
   audioState.bgmStarted = true;
-  let step = 0;
-  const pulse = () => {
+  audioState.bgmCtx = { ctx, step: 0, bpm: 58, tick: 0 };
+  const bgm = audioState.bgmCtx;
+
+  function playLayer(freq, dur, type, gain, delay = 0, pan = 0) {
+    if (audioState.muted || !bgm.ctx) return;
+    const t = bgm.ctx.currentTime + delay;
+    const osc = bgm.ctx.createOscillator();
+    const amp = bgm.ctx.createGain();
+    const panner = bgm.ctx.createStereoPanner ? bgm.ctx.createStereoPanner() : null;
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    amp.gain.setValueAtTime(0.0001, t);
+    amp.gain.exponentialRampToValueAtTime(gain, t + 0.02);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    if (panner) { panner.pan.setValueAtTime(pan, t); osc.connect(amp).connect(panner).connect(bgm.ctx.destination); }
+    else osc.connect(amp).connect(bgm.ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+
+  const tick = () => {
     if (audioState.muted) return;
-    const bass = [65, 73, 82, 98][step % 4];
-    const bell = [392, 330, 440, 294, 523, 440, 392, 330][step % 8];
-    tone(bass, 1.8, "sine", 0.012);
-    tone(bell, 0.22, "triangle", 0.012, 0.12);
-    step += 1;
+    const danger = stackRatio();
+    const actualBpm = 58 + danger * 38 + (currentBeast() ? 8 : 0);
+    const beatLen = 60 / actualBpm;
+    bgm.tick += 1;
+    bgm.step += 1;
+
+    // 钟楼低频嗡鸣（持续压迫感）
+    if (bgm.tick % 16 === 0) playLayer(41, beatLen * 4.5, "sine", 0.008, 0, 0);
+
+    // 秒针走动（白噪声滤波模拟齿轮咬合）
+    if (bgm.tick % 4 === 0) {
+      noise(0.04, 0.005 + danger * 0.008);
+    }
+
+    // 主旋律——钟声交响（多音色层叠）
+    const bellSeq = [392, 330, 440, 294, 523, 440, 392, 330, 392, 523, 587, 440, 330, 392, 294, 262];
+    const bellIndex = bgm.step % bellSeq.length;
+    if (bgm.tick % 8 === 0) {
+      playLayer(bellSeq[bellIndex] * (1 + danger * 0.1), beatLen * 1.2, "triangle", 0.018 + danger * 0.004, 0.03, -0.2);
+      playLayer(bellSeq[(bellIndex + 4) % bellSeq.length] * 0.5, beatLen * 1.8, "sine", 0.01, beatLen * 0.2, 0.3);
+    }
+
+    // 和声层（每4小节一个变化）
+    const chordRoot = [196, 220, 247, 262, 294, 330, 349, 392][bgm.step % 8];
+    if (bgm.tick % 32 === 0) {
+      playLayer(chordRoot, beatLen * 4, "sine", 0.006, 0, 0);
+      playLayer(chordRoot * 1.5, beatLen * 3.8, "triangle", 0.005, beatLen * 0.5, -0.4);
+    }
+
+    // 神兽日变奏
+    if (currentBeast() === "白虎" && bgm.tick % 24 === 0) {
+      playLayer(587, beatLen * 0.8, "sawtooth", 0.012, 0, 0);
+    }
+    if (currentBeast() === "朱雀" && bgm.tick % 20 === 0) {
+      playLayer(784, beatLen * 0.6, "triangle", 0.014, 0, 0.4);
+    }
+
+    // 堆高加速提示（方块堆到危险区加入低频心跳）
+    if (danger >= 0.75 && bgm.tick % 2 === 0) {
+      playLayer(55 + danger * 20, beatLen * 0.35, "sine", 0.018, 0, 0);
+    }
   };
-  pulse();
-  audioState.bgmTimer = setInterval(pulse, 1800);
+
+  tick();
+  audioState.bgmTimer = setInterval(tick, Math.round(60000 / audioState.bgmCtx.bpm / 4));
 }
 
 function toggleAudio() {
@@ -417,6 +479,10 @@ function toggleAudio() {
   if (!audioState.muted) {
     ensureAudio();
     playSfx("whisper");
+  } else {
+    if (audioState.bgmTimer) { clearInterval(audioState.bgmTimer); audioState.bgmTimer = null; }
+    if (audioState.heartbeatTimer) { clearInterval(audioState.heartbeatTimer); audioState.heartbeatTimer = null; }
+    audioState.bgmStarted = false;
   }
   setAudioButton();
 }
@@ -466,6 +532,11 @@ function connectWS() {
       });
       if (activeTab === "fog") renderFog();
     }
+    if (message.type === "fog_new_goods" && message.payload) {
+      if (message.payload.goods) state.v2.fogGoods = message.payload.goods;
+      if (message.payload.preview) { state.v2.fogPreview = message.payload.preview; updateRulePanel(); }
+      if (activeTab === "fog") renderFog();
+    }
     if (message.type === "pact_update" && message.payload?.pact) {
       const index = state.v2.pacts.findIndex((item) => item.id === message.payload.pact.id);
       if (index >= 0) state.v2.pacts[index] = message.payload.pact;
@@ -483,29 +554,53 @@ function connectWS() {
 
 function handleTrainEvent(payload) {
   const title = payload.title || payload.author || "终焉列车";
-  showCenterLine(`${title} 到站`, "train");
+  const text = payload.text || "";
+  // 解析列车信息用于大字展示
+  const cycleMatch = text.match(/第(\d+)天\s*·\s*(\S+)·(\S+)/);
+  const dayInfo = cycleMatch ? `第${cycleMatch[1]}天 · ${cycleMatch[2]}·${cycleMatch[3]}` : "";
+  showCenterLine(`${title} 到站${dayInfo ? " — " + dayInfo : ""}`, "train");
   playSfx("train");
   document.body.classList.add("train-pulse");
   setTimeout(() => document.body.classList.remove("train-pulse"), 3200);
-  if (title.includes("正午") || payload.text?.includes("雾区")) {
+  // 更新顶栏规则显示
+  if (payload.cycle) {
+    $("#cycleTitle").textContent = `第${payload.cycle.day}天 · ${payload.cycle.zodiac}·${payload.cycle.code}`;
+    if (payload.cycle.beast) $("#zodiacEffect").textContent = `${payload.cycle.beast}降临 · ${payload.cycle.zodiac}日规则已激活`;
+    setTimeout(updateRulePanel, 100);
+  }
+  if (title.includes("正午") || text.includes("雾区")) {
     $$(".fog-card").forEach((card) => {
       card.classList.remove("train-highlight");
       void card.offsetWidth;
       card.classList.add("train-highlight");
     });
   }
-  if (title.includes("黄昏") || payload.text?.includes("情报")) {
+  if (title.includes("黄昏") || text.includes("情报")) {
     $$(".oracle-grid article").forEach((card) => {
       card.classList.remove("train-highlight");
       void card.offsetWidth;
       card.classList.add("train-highlight");
     });
   }
+  if (title.includes("午夜")) {
+    document.body.classList.add("night-wave");
+    setTimeout(() => document.body.classList.remove("night-wave"), 5000);
+  }
+  if (title.includes("终焉")) {
+    document.body.classList.add("finale-flash");
+    setTimeout(() => document.body.classList.remove("finale-flash"), 5000);
+  }
 }
 
 function renderAll() {
   if (!state) return;
   const cycle = state.v2.cycle;
+  // 终焉之日视觉
+  if (cycle.dayNumber >= 10 || cycle.activeBeastEvent === "青龙") {
+    document.body.classList.add("finale-day");
+  } else {
+    document.body.classList.remove("finale-day");
+  }
   $("#cycleTitle").textContent = `第${cycle.dayNumber}天 · ${cycle.rulingZodiac}·${cycle.zodiacCode} · ${cycle.title}`;
   $("#zodiacEffect").textContent = `${cycle.declaration} / ${cycle.zodiacEffect}`;
   $("#playerName").textContent = state.identity?.username ? state.player.name : "未登录试炼者";
@@ -521,6 +616,29 @@ function renderAll() {
   renderPathPanel();
   drawNextPiece();
   renderTab();
+  updateRulePanel();
+}
+
+function updateRulePanel() {
+  if (!state) return;
+  const cycle = state.v2.cycle;
+  const beast = state.v2.activeBeastEvent || cycle.activeBeastEvent || "无";
+  const beastDesc = { "白虎": "PVP狂热·攻击翻倍", "朱雀": "规则重写·涅槃之风", "玄武": "坚不可摧·护盾无限", "青龙": "十日裁决·清算将至" }[beast] || "平静之日";
+  // 雾区动向
+  const preview = state.v2.fogPreview;
+  const fogSummary = preview ? `T+0预测：${preview.hint}` : "市场平稳 — 等待午夜列车";
+  // 试炼加成
+  const boosts = [];
+  if (Number(state.player.stats?.oracleBattleBoost || 0) > 0) boosts.push(`战场情报×${state.player.stats.oracleBattleBoost}`);
+  if (Number(state.player.stats?.oracleZodiacBoost || 0) > 0) boosts.push(`生肖情报×${state.player.stats.oracleZodiacBoost}`);
+  const holdings = (state.player.positions || []).filter(p => p.type === "fog");
+  if (holdings.length > 0) boosts.push(`雾区持仓×${holdings.length}`);
+  const boostText = boosts.length > 0 ? boosts.join("  ") : "无";
+  const el = (id) => document.getElementById(id);
+  if (el("ruleZodiac")) el("ruleZodiac").textContent = `${cycle.rulingZodiac}·${cycle.zodiacCode} — ${cycle.zodiacEffect}`;
+  if (el("ruleBeast")) el("ruleBeast").textContent = `${beast} — ${beastDesc}`;
+  if (el("ruleFog")) el("ruleFog").textContent = fogSummary;
+  if (el("ruleBoost")) el("ruleBoost").textContent = boostText;
 }
 
 function tickClock() {
@@ -533,21 +651,34 @@ function tickClock() {
 function renderChronicle() {
   const collections = state.v2.collections;
   const holdings = (state.player.positions || []).filter((item) => item.type === "fog");
+  const categoryEffect = (cat) => {
+    if (cat === "神兽遗物") return "神兽祝福 +15%（当日神兽契合 +40%）";
+    if (cat === "生肖符咒") return "试炼刻痕 +15%";
+    if (cat === "规则碎片") return "情报效果 +8%";
+    if (cat === "钟楼零件") return "下落减速 +5%";
+    return "";
+  };
+  const fogBonusText = (goodsName) => {
+    for (const g of (state.v2.fogGoods || [])) {
+      if (g.id === goodsName || g.name === goodsName) return categoryEffect(g.category);
+    }
+    return "";
+  };
   $("#chronicleContent").innerHTML = `
     <div class="chronicle-kpis">
       <div><span>当前刻痕</span><b>${money(state.player.coins)}</b></div>
       <div><span>总消行</span><b>${money(state.player.lines)}</b></div>
       <div><span>总分数</span><b>${money(state.player.score)}</b></div>
     </div>
-    <h3>雾区持仓</h3>
-    <div class="mini-list">${holdings.length ? holdings.map((item) => `<article><b>${escapeHtml(item.code)}</b><span>x${escapeHtml(item.qty)} / 成本 ${money(item.cost)}</span></article>`).join("") : "<p>暂无持仓。</p>"}</div>
+    <h3>雾区持仓 ${holdings.length ? `<small>（${holdings.length}/5，试炼结算时生效）</small>` : ""}</h3>
+    <div class="mini-list">${holdings.length ? holdings.map((item) => `<article><b>${escapeHtml(item.code)}</b><span>x${escapeHtml(item.qty)} / 成本 ${money(item.cost)}</span><em class="fog-effect">${escapeHtml(fogBonusText(item.code))}</em></article>`).join("") : "<p>暂无持仓。购买雾区商品可在试炼结算时获得额外刻痕加成。</p>"}</div>
     <h3>收集</h3>
     <div class="mark-wall"><span>生肖 ${collections.zodiacMarks.length}/12：${collections.zodiacMarks.map(escapeHtml).join(" ") || "未得印"}</span><span>神兽 ${collections.beastMarks.length}/4：${collections.beastMarks.map(escapeHtml).join(" ") || "未得印"}</span></div>
     <h3>钟渊之路</h3>
     <div class="path-bar"><i style="width:${Math.min(100, collections.pathProgress / 120 * 100)}%"></i></div>
     <small>第 ${collections.pathLevel} 层 · 下层进度 ${collections.pathProgress}/120</small>
     <h3>铭刻升级</h3>
-    <div class="upgrade-list">${state.v2.upgradeTree.map((item) => `<article><b>${escapeHtml(item.name)} Lv.${item.level}</b><button data-engrave="${item.category}">${money(item.nextCost)}</button></article>`).join("")}</div>
+    <div class="upgrade-list">${state.v2.upgradeTree.map((item) => `<article><b>${escapeHtml(item.name)} Lv.${item.level} <small>(${escapeHtml(item.effect)})</small></b><button data-engrave="${item.category}">${money(item.nextCost)}</button></article>`).join("")}</div>
   `;
   $$("[data-engrave]").forEach((button) => button.addEventListener("click", async () => {
     try {
@@ -685,19 +816,32 @@ function renderPact() {
 }
 
 function renderOracle() {
+  const effectLabels = {
+    market_preview: "神兽遗物价格上涨 12%",
+    market_warning: "列车遗落物价格下跌 8%",
+    battle_hint: "未来 3 局四消额外 +15% 刻痕",
+    zodiac_hint: "未来 3 局生肖加成 +10%",
+    pact_hint: "契约贡献加成 +20%",
+    train_hint: "触发列车预警，雾区提前波动"
+  };
   $("#tabContent").innerHTML = `<div class="oracle-grid">${state.v2.oracleCards.map((card) => `
     <article class="${card.purchased ? "sold" : ""}">
       <small>${escapeHtml(card.category)} · 准确率 ${Math.round(card.accuracy * 100)}%</small>
       <h3>${escapeHtml(card.title)}</h3>
       <p>${escapeHtml(card.description)}</p>
       <em>${escapeHtml(card.flavor)}</em>
-      <button data-oracle="${card.id}" ${card.purchased ? "disabled" : ""}>${card.purchased ? "已售出" : `${money(card.cost)} 刻痕`}</button>
+      ${card.purchased ? `<div class="oracle-effect-badge">${effectLabels[card.effect?.type] || "效果已激活"}</div>` : ""}
+      <button data-oracle="${card.id}" ${card.purchased ? "disabled" : ""}>${card.purchased ? "已出售" : `${money(card.cost)} 刻痕`}</button>
     </article>
   `).join("")}</div>`;
   $$("[data-oracle]").forEach((button) => button.addEventListener("click", async () => {
     try {
+      const card = state.v2.oracleCards.find((c) => c.id === button.dataset.oracle);
+      const effectText = card ? (effectLabels[card.effect?.type] || "情报已生效") : "";
       await post("/api/oracle/buy", { cardId: button.dataset.oracle });
-      toast("情报已写入铭刻之书");
+      toast(`情报已写入铭刻之书：${effectText}`);
+      showCenterLine(`情报「${card?.title || ""}」：${effectText}`, "path");
+      playSfx("pact");
       await load();
     } catch (error) {
       toast(error.message);
@@ -1060,6 +1204,7 @@ function clearLines() {
     if (trial.piece?.modifier) trial.specialCounts.push(trial.piece.modifier);
     trial.combo += 1;
     trial.lines += cleared;
+    if (cleared > trial.maxClear) trial.maxClear = cleared;
     trial.zhongyuan = Math.min(10, trial.zhongyuan + cleared);
     trial.nirvanaLines += cleared;
     pathState.totalLines = Number(pathState.totalLines || 0) + cleared;
@@ -1089,6 +1234,17 @@ function clearLines() {
     if (trial.combo > 1) addFloat(`COMBO x${trial.combo}`, trial.cols * trial.cell / 2, 304, comboColor(trial.combo), comboSize(trial.combo));
     playClear(cleared);
     playCombo(trial.combo);
+    if (cleared >= 4) {
+      playSfx("train");
+      showCenterLine("四✨消✨！", "train");
+      document.body.classList.add("tetris-flash");
+      setTimeout(() => document.body.classList.remove("tetris-flash"), 800);
+    }
+    if (trial.combo >= 5) {
+      queueWhisper(`🔥${trial.combo}连消！`);
+      document.body.classList.add("combo-surge");
+      setTimeout(() => document.body.classList.remove("combo-surge"), 600);
+    }
     shake(cleared >= 4 ? 3.4 : 1 + cleared * 0.45, 110 + cleared * 45);
     trial.grid = trial.grid.filter((row) => row.some((cell) => !cell));
     while (trial.grid.length < trial.rows) trial.grid.unshift(Array(trial.cols).fill(null));
@@ -1520,8 +1676,16 @@ async function endTrial() {
   ensureRenderLoop();
   try {
     const duration = Math.round((Date.now() - trial.startedAt) / 1000);
-    const result = await post("/api/trials/report", { score: trial.score, lines: trial.lines, duration, mode: currentTrialMode(), hardDrops: trial.hardDrops, specials: trial.specialCounts });
-    toast(`试炼结束，获得 ${money(result.data.marksEarned)} 刻痕`);
+    const result = await post("/api/trials/report", { score: trial.score, lines: trial.lines, duration, mode: currentTrialMode(), hardDrops: trial.hardDrops, specials: trial.specialCounts, maxClear: trial.maxClear });
+    const bonusText = result.data.fogBonus > 0 ? `（含雾区持仓 +${result.data.fogBonus}）` : "";
+    toast(`试炼结束，获得 ${money(result.data.marksEarned)} 刻痕${bonusText}`);
+    if (result.data.fogBonus > 0) {
+      addFloat(`雾区+${result.data.fogBonus}`, trial.cols * trial.cell / 2, 180, "#ffd45f", 20);
+      showCenterLine(`雾区持仓加成 +${result.data.fogBonus} 刻痕`, "path");
+    }
+    if (result.data.maxClear >= 4) {
+      showCenterLine(`🏆 ${result.data.maxClear}行四消！钟声铭刻`, "path");
+    }
     await load();
   } catch (error) {
     toast(error.message);
@@ -1548,6 +1712,7 @@ function startTrial() {
   trial.pendingGarbageRows = 0;
   trial.lastClearAt = 0;
   trial.echoStacks = 0;
+  trial.maxClear = 0;
   trial.echoTriggers = 0;
   trial.zhongyuan = 0;
   trial.history = [];

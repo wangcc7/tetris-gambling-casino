@@ -2154,3 +2154,142 @@ h2 {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== V5 新增视觉增强 ===== */
+
+/* 四消全屏闪烁 */
+.tetris-flash {
+  animation: tetrisFlash 0.8s ease-out;
+}
+@keyframes tetrisFlash {
+  0% { background: rgba(255,245,194,.28); }
+  100% { background: transparent; }
+}
+
+/* Combo 涌动 */
+.combo-surge {
+  animation: comboSurge 0.6s ease-out;
+}
+@keyframes comboSurge {
+  0% { filter: brightness(1.35) saturate(1.4); transform: scale(1.008); }
+  50% { filter: brightness(1.15) saturate(1.2); }
+  100% { filter: brightness(1) saturate(1); transform: scale(1); }
+}
+
+/* 午夜列车波动 */
+.night-wave {
+  animation: nightWave 5s ease-in-out;
+}
+@keyframes nightWave {
+  0%, 100% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(8deg) brightness(0.92); }
+}
+
+/* 终焉列车闪烁 */
+.finale-flash {
+  animation: finaleFlash 5s ease-out;
+}
+@keyframes finaleFlash {
+  0% { background: rgba(139,34,82,.15); }
+  20% { background: transparent; }
+  40% { background: rgba(139,34,82,.1); }
+  60% { background: transparent; }
+  80% { background: rgba(139,34,82,.05); }
+  100% { background: transparent; }
+}
+
+/* 情报效果标签 */
+.oracle-effect-badge {
+  display: block;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(107,63,160,.22);
+  border: 1px solid rgba(107,63,160,.45);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--hl);
+  text-align: center;
+  animation: badgePulse 2s ease-in-out infinite;
+}
+@keyframes badgePulse {
+  0%, 100% { border-color: rgba(107,63,160,.45); }
+  50% { border-color: rgba(107,63,160,.8); }
+}
+
+/* 雾区持仓效果文字 */
+.fog-effect {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--hl);
+  font-style: italic;
+}
+
+/* 铭刻升级后的效果文字 */
+.upgrade-list small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* 试炼面板增强 */
+.trial-overlay.train {
+  font-size: 1.35em;
+  text-shadow: 0 0 20px rgba(255, 245, 194, .42);
+}
+
+/* 规则面板 */
+.rule-panel {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  font-size: 12px;
+  opacity: .85;
+}
+.rule-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(194, 168, 104, .12);
+}
+.rule-label {
+  color: var(--muted);
+  font-weight: 400;
+}
+.rule-row span:last-child {
+  color: var(--accent);
+  text-align: right;
+  font-weight: 500;
+}
+
+/* 终焉之日（第10天）特效 */
+body.finale-day .v2-header {
+  background: linear-gradient(135deg, #1a0a0a 0%, #2d1515 50%, #1a0a0a 100%);
+  animation: finale-header-pulse 3s ease-in-out infinite;
+}
+body.finale-day .trial-board-shell {
+  box-shadow: 0 0 30px rgba(220, 40, 40, .35), 0 0 60px rgba(220, 40, 40, .15);
+  animation: finale-glow 2s ease-in-out infinite alternate;
+}
+@keyframes finale-header-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+@keyframes finale-glow {
+  from { box-shadow: 0 0 30px rgba(220, 40, 40, .35), 0 0 60px rgba(220, 40, 40, .15); }
+  to { box-shadow: 0 0 45px rgba(255, 60, 40, .5), 0 0 90px rgba(220, 40, 40, .25); }
+}
+
+/* 终焉倒计时文字 */
+.finale-countdown {
+  display: inline-block;
+  animation: finale-blink 0.8s ease-in-out infinite;
+  color: #ff4040;
+  font-weight: 700;
+}
+@keyframes finale-blink {
+  0%, 100% { opacity: .7; }
+  50% { opacity: 1; }
+}

@@ -79,13 +79,110 @@ const npcs = [
 ];
 
 const v2Npcs = [
-  ...npcs,
-  { name: "列车长", personality: "沉默神秘", strategy: "只在列车进站时透露方向", line: "下一站，不是你们的终点。" },
-  { name: "钟楼守", personality: "疯狂时间信徒", strategy: "守着第十层的禁忌", line: "第十层？没有人上过第十层。" },
-  { name: "白虎", personality: "锋利直白", strategy: "逼迫试炼者正面对抗", line: "胜者问规则。败者被规则问。" },
-  { name: "朱雀", personality: "温柔燃烧", strategy: "让旧规则在火里重写", line: "烧掉的规则，不会再长出来。" },
-  { name: "玄武", personality: "沉稳无边", strategy: "考验生存与耐心", line: "别怕。城墙比你想象的要厚。" },
-  { name: "青龙幻影", personality: "威严终局", strategy: "宣布十日裁决", line: "你们的十日，到此为止。" }
+  { name: "列车长", personality: "沉默神秘", strategy: "只在列车进站时透露方向",
+    lines: {
+      dawn: ["下一站，不是你们的终点。", "钟响了。准备好你们的选择。", "今天会有人下车，也一定会有人留下。"],
+      noon: ["正午的列车不等人。雾区马上要动了。", "看到车窗外那些光了吗？那是规则在改写。"],
+      dusk: ["黄昏列车带来了情报。相信我，有些事不知道更好。", "情报是灯，照不照得对方向，看你自己。"],
+      night: ["午夜之后，今天的商品就要消失。", "想卖的，现在就卖。明天的价，谁也不知道。"],
+      end: ["终焉列车进站。结算开始。", "你们的刻痕，钟楼已经记录。"],
+      idle: ["呜——呜——", "铁轨在响。有东西在靠近。", "下一站，不是你们的终点。", "别在站台上站太久。", "车票上的字又变了。"],
+      beast_white_tiger: ["白虎日到了。别躲。", "白虎在看着你们。站出来。", "今天不是躲的日子，是争的日子。"],
+      beast_vermilion_bird: ["朱雀的火烧起来了。旧规则都要重写。", "涅槃之风已起。护好你们的棋盘。"],
+      beast_black_tortoise: ["玄武的低语：城墙厚着呢。", "守住。今天没人能推倒你。", "别怕。城墙比你的恐惧厚。"],
+      beast_azure_dragon: ["青龙睁眼了。十日快结束了。", "裁决将至。所有回响都会被清算。", "你们的十日，到此为止。"]
+    }
+  },
+  { name: "钟楼守", personality: "疯狂时间信徒", strategy: "守着第十层的禁忌",
+    lines: {
+      dawn: ["第十层？没有人上过第十层。", "今天的钟声，比昨天慢了半拍。这意味着什么？"],
+      idle: ["我在钟楼里数了一万七千次日落。和你们的人数刚好一样。", "第十层？没有人上过第十层。", "你们以为自己在玩游戏？时间在玩你们。", "每一声钟响，都有一个试炼者消失。"],
+      night: ["午夜是最接近第十层的时刻。别睡。"]
+    }
+  },
+  { name: "白虎", personality: "锋利直白", strategy: "逼迫试炼者正面对抗",
+    lines: {
+      idle: ["胜者问规则。败者被规则问。", "牙不错。下一位。", "敢不敢正面来？"],
+      highlight: ["牙不错。下一位。", "看到了吗？这才是对抗。", "钟城里终于有人敢对打了。"],
+      trial_end: ["你的牙，我记下了。"]
+    }
+  },
+  { name: "朱雀", personality: "温柔燃烧", strategy: "让旧规则在火里重写",
+    lines: {
+      idle: ["烧掉的规则，不会再长出来。", "别怕火。火是重写，不是毁灭。", "我看见你的棋盘了——底部那几行，我要帮你清理吗？"],
+      highlight: ["涅槃！你的棋盘中飞出了火鸟。", "有人烧掉了一条旧规则。", "那些消失的行不会白消失。"],
+      trial_end: ["灰烬里还有光。下一局，接着烧。"]
+    }
+  },
+  { name: "玄武", personality: "沉稳无边", strategy: "考验生存与耐心",
+    lines: {
+      idle: ["别怕。城墙比你想象的要厚。", "急什么？钟楼还没倒。", "守得住，就赢了。", "你的棋盘堆得再高，也高不过城墙。"],
+      highlight: ["有人守住了。玄武的城又坚固了一分。", "看——他没倒。"],
+      trial_end: ["你撑下来了。城还在。"]
+    }
+  },
+  { name: "青龙", personality: "威严终局", strategy: "宣布十日裁决",
+    lines: {
+      idle: ["所有回响都会被记住。", "不要妄图欺骗钟渊系统。", "你们的每一个选择，我都在看。"],
+      dawn: ["今天就是第十天。裁决开始。", "十日已到。列出你们的名字。"],
+      trial_end: ["裁决已下。"],
+      highlight: ["这个人的名字会被刻入钟楼。", "青龙殿新增了一位。"]
+    }
+  },
+  { name: "齐夏", personality: "冷静说谎者", strategy: "先拆规则，再拆人心",
+    lines: {
+      idle: ["先别相信钟声，先看它要求你付出什么。", "规则从来不是写出来的那些。写在空行之间的，才是真正的规则。", "你有没有发现，每次你以为懂了一条规则，它就变了？"],
+      highlight: ["有意思。有人摸到规则的边缘了。", "你看，他找到了空行里的字。"]
+    }
+  },
+  { name: "林檎", personality: "清醒心理医生", strategy: "观察情绪裂缝",
+    lines: {
+      idle: ["你以为自己在选方块，其实是在暴露恐惧。", "紧张的时候方块落得更快。这是物理，也是心理。", "别和钟声较劲。它会赢的。"],
+      highlight: ["心理素质不错。下一局呢？"]
+    }
+  },
+  { name: "乔家劲", personality: "仗义硬拳", strategy: "用直觉撞开死局",
+    lines: {
+      idle: ["别把路想得太玄，能活一秒就往前打一秒。", "拳头比脑子快？那就要比规则快。", "别站在那儿想！落！"],
+      highlight: ["好！这一拳打在规则脸上了。"]
+    }
+  },
+  { name: "陈俊南", personality: "笑面担当", strategy: "用玩笑遮住压力",
+    lines: {
+      idle: ["这局要是还能回来，我请全频道喝凉茶。", "别紧张嘛，反正输了也不会真死——大概。", "你刚才那一步，是不是踩到规则尾巴了？"],
+      highlight: ["喔！这可以啊！凉茶我请定了。"]
+    }
+  },
+  { name: "楚天秋", personality: "温柔疯王", strategy: "以秩序包装危险",
+    lines: {
+      idle: ["所有人都想破局，可不是所有人都配知道出口。", "别打听出口的事。先活着。", "温柔的规则最危险。因为你看不出它的刀刃。", "今天的情报，我只说一半。剩下的一半，自己看。"],
+      highlight: ["他找到了出口的方向。可惜，方向会变。"],
+      trial_end: ["你的路还没断。继续走。"]
+    }
+  },
+  { name: "文巧云", personality: "沉静领袖", strategy: "把牺牲算进棋盘",
+    lines: {
+      idle: ["别急着赢，先确认你愿意失去什么。", "最难的决策不是怎么赢——是怎么输。", "牺牲不是你说的算。是钟声。"],
+      highlight: ["有人在算牺牲。而且算对了。"]
+    }
+  },
+  { name: "章晨泽", personality: "锋利行动派", strategy: "在压迫里反击",
+    lines: {
+      idle: ["规则越冷，越要把手伸出去。", "不要被钟声压住。反击。", "你不动，规则就替你动。"],
+      highlight: ["反击！对，就是这样。"]
+    }
+  },
+  { name: "甜甜", personality: "柔软幸存者", strategy: "用善意维持队伍温度",
+    lines: {
+      idle: ["如果钟声又响了，至少别让同伴一个人听。", "别怕。我们都在。虽然都在各自的棋盘里。", "你饿不饿？我这里有饼干。"],
+      highlight: ["他做到了！我们一起鼓掌！"]
+    }
+  },
+  { name: "地虎", personality: "粗暴裁判", strategy: "逼玩家正面下注",
+    lines: {
+      idle: ["别磨蹭，钟城从不奖励犹豫的人。", "下注！快！", "你手里握着什么？亮出来。"]
+    }
+  }
 ];
 
 const zodiacDays = [
@@ -661,6 +758,23 @@ async function initMysqlSchema() {
       UNIQUE KEY uk_v2_oracle_user_card (user_id, card_id)
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS v2_daily_settlement (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      day_key VARCHAR(32) NOT NULL,
+      user_id VARCHAR(64) NOT NULL,
+      player_name VARCHAR(64) NOT NULL,
+      marks_earned INT UNSIGNED NOT NULL DEFAULT 0,
+      lines_cleared INT UNSIGNED NOT NULL DEFAULT 0,
+      score INT UNSIGNED NOT NULL DEFAULT 0,
+      rank_daily INT UNSIGNED NOT NULL DEFAULT 0,
+      rank_cycle INT UNSIGNED NOT NULL DEFAULT 0,
+      beast_score INT UNSIGNED NOT NULL DEFAULT 0,
+      beast_event VARCHAR(32) DEFAULT '',
+      settled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_v2_settlement_user_day (user_id, day_key)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
 }
 
 function decodeJson(value, fallback) {
@@ -1196,28 +1310,24 @@ function leaderboards() {
 function rankingsV2() {
   const players = Object.values(state.players);
   const snapshots = (state.v2.rankingSnapshots || []).filter((item) => item.dayKey === state.v2.dayKey);
-  const rows = (mapper, fallback) => [...players.map(mapper), ...fallback]
-    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
-    .slice(0, 50)
-    .map((item, index) => ({ rank: index + 1, ...item }));
-  const snapshotRows = (mapper, fallback) => [...snapshots.map(mapper), ...fallback]
-    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
-    .slice(0, 50)
-    .map((item, index) => ({ rank: index + 1, ...item }));
-  const fallback = [
-    { name: "齐夏", score: 12880 },
-    { name: "林檎", score: 9960 },
-    { name: "乔家劲", score: 8800 },
-    { name: "楚天秋", score: 7600 },
-    { name: "列车长", score: 6400 }
-  ];
+  const isEmpty = (arr) => !arr || arr.length === 0;
+  const rows = (mapper) => {
+    const data = players.map(mapper).filter((item) => Number(item.score || 0) > 0);
+    return data.sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 50).map((item, index) => ({ rank: index + 1, ...item }));
+  };
+  const snapshotRows = (mapper) => {
+    const data = snapshots.map(mapper).filter((item) => Number(item.score || 0) > 0);
+    return data.sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 50).map((item, index) => ({ rank: index + 1, ...item }));
+  };
+  const npcIntro = [{ name: "钟楼告示", score: 0 }];
+
   return {
-    daily_marks: snapshotRows((r) => ({ name: r.name, score: r.marks || r.score }), fallback),
-    daily_fog: rows((p) => ({ name: p.name, score: Math.max(0, p.coins - state.economy.initialCoins) }), fallback.slice().reverse()),
-    daily_pact: rows((p) => ({ name: p.name, score: Number(p.stats?.guildActions || 0) * 300 + p.lines * 10 }), fallback),
-    cycle_total: snapshotRows((r) => ({ name: r.name, score: r.score + r.marks }), fallback),
-    beast_hall: rows((p) => ({ name: p.name, score: Number(p.stats?.beasts || 0) * 1000 + p.score }), fallback),
-    zodiac_album: snapshotRows((r) => ({ name: r.name, score: r.lines * 1000 + r.score }), fallback)
+    daily_marks: snapshotRows((r) => ({ name: r.name, score: r.marks || r.score })),
+    daily_fog: rows((p) => ({ name: p.name, score: Math.max(0, p.coins - state.economy.initialCoins) })),
+    daily_pact: rows((p) => ({ name: p.name, score: Number(p.stats?.guildActions || 0) * 300 + p.lines * 10 })),
+    cycle_total: snapshotRows((r) => ({ name: r.name, score: r.score + r.marks })),
+    beast_hall: snapshotRows((r) => ({ name: r.name, score: Number(r.beastScore || 0), beast: r.beast || "" })),
+    zodiac_album: snapshotRows((r) => ({ name: r.name, score: r.lines * 1000 + r.score }))
   };
 }
 
@@ -1314,8 +1424,14 @@ async function applyOracleEffect(player, card) {
     }
     wsBroadcast("fog_price", state.v2.fogGoods.filter((item) => item.category === category).map((goods) => ({ goodsId: goods.id, name: goods.name, newPrice: goods.currentPrice, trend: goods.trend })));
   }
-  if (type === "battle_hint") player.stats.oracleBattleBoost = Number(player.stats.oracleBattleBoost || 0) + 1;
-  if (type === "zodiac_hint") player.stats.oracleZodiacBoost = Number(player.stats.oracleZodiacBoost || 0) + 1;
+  if (type === "battle_hint") {
+    player.stats.oracleBattleBoost = Number(player.stats.oracleBattleBoost || 0) + 3;
+    pushMessage("规则之眼", `${player.name} 获得战场情报「第七列」——未来 3 局，四消额外 +15% 刻痕`, "system", "全城广播");
+  }
+  if (type === "zodiac_hint") {
+    player.stats.oracleZodiacBoost = Number(player.stats.oracleZodiacBoost || 0) + 3;
+    pushMessage("规则之眼", `${player.name} 获得生肖情报「生肖偏袒」——未来 3 局，当日生肖加成 +10%`, "system", "全城广播");
+  }
   if (type === "pact_hint") player.stats.oraclePactBoost = Number(player.stats.oraclePactBoost || 0) + 1;
   if (type === "train_hint") {
     state.v2.trainLog.unshift({ at: new Date().toISOString(), title: "午夜列车偏移", text: `${player.name} 触发列车情报，雾区将在下一轮波动前提前预警。` });
@@ -1388,8 +1504,10 @@ async function checkTrainArrivals() {
 }
 
 async function onTrainArrive(train, cycle) {
-  const text = `【${train.name}进站】${cycle.rulingZodiac}·${cycle.zodiacCode}：${cycle.title}。${train.effect}`;
-  state.v2.trainLog.unshift({ at: new Date().toISOString(), title: train.name, text });
+  const beast = cycle.activeBeastEvent || "";
+  const beastNote = beast ? ` | ${beast}降临：${beast === "白虎" ? "PVP攻击行与对抗奖励增强" : beast === "朱雀" ? "稀有方块概率翻倍，涅槃方块出现" : beast === "玄武" ? "无尽生存奖励增强，下落加速" : beast === "青龙" ? "全属性强化，裁决结算" : ""}` : "";
+  const text = `【第${cycle.dayNumber}天 · ${cycle.rulingZodiac}·${cycle.zodiacCode}】宣言：${cycle.declaration} | 规则：${cycle.zodiacEffect}${beastNote} | ${train.effect}`;
+  state.v2.trainLog.unshift({ at: new Date().toISOString(), title: train.name, text, cycle: { day: cycle.dayNumber, zodiac: cycle.rulingZodiac, code: cycle.zodiacCode, beast } });
   state.v2.trainLog = state.v2.trainLog.slice(0, 20);
   pushMessage("终焉列车", `"呜——呜——" ${text}`, "train", "全城广播");
   if (train.name === "正午列车") {
@@ -1414,9 +1532,51 @@ async function onTrainArrive(train, cycle) {
       goods.trend = "volatile";
       await persistFogGoods(goods);
     }
-    wsBroadcast("fog_new_goods", { goods: state.v2.fogGoods });
+    // 生成明日雾区预测
+    const cats = ["神兽遗物", "生肖符咒", "规则碎片", "钟楼零件", "列车遗落物"];
+    const catTrends = {};
+    for (const cat of cats) {
+      const catGoods = state.v2.fogGoods.filter(g => g.category === cat);
+      const avgChange = catGoods.reduce((sum, g) => {
+        const hist = g.priceHistory || [];
+        return sum + (hist.length >= 2 ? (hist[hist.length-1].price - hist[0].price) / hist[0].price : 0);
+      }, 0) / Math.max(1, catGoods.length);
+      catTrends[cat] = avgChange;
+    }
+    const sorted = Object.entries(catTrends).sort((a, b) => b[1] - a[1]);
+    state.v2.fogPreview = {
+      hotCategories: sorted.slice(0, 2).map(([cat]) => cat),
+      hotRate: `+${Math.round(sorted[0][1] * 100)}%`,
+      hint: `明日${sorted[0][0]}预计看涨${Math.round(sorted[0][1] * 100)}%，${sorted[1][0]}紧随其后`,
+      updatedAt: new Date().toISOString()
+    };
+    wsBroadcast("fog_new_goods", { goods: state.v2.fogGoods, preview: state.v2.fogPreview });
   }
-  if (train.name === "终焉列车") wsBroadcast("settlement", { type: "daily_preview", cycle, ranking: rankingsV2().daily_marks.slice(0, 10) });
+  if (train.name === "终焉列车") {
+    const ranking = rankingsV2();
+    const daily = ranking.daily_marks || [];
+    const cycleTotal = ranking.cycle_total || [];
+    const beastHall = ranking.beast_hall || [];
+    wsBroadcast("settlement", { type: "daily_preview", cycle, ranking: daily.slice(0, 10) });
+    // 持久化每日结算
+    if (dbReady) {
+      for (let i = 0; i < daily.length; i++) {
+        const entry = daily[i];
+        const player = Object.values(state.players).find(p => p.name === entry.name);
+        if (!player) continue;
+        const cycleRank = cycleTotal.findIndex(r => r.name === entry.name);
+        const beastEntry = beastHall.find(r => r.name === entry.name);
+        try {
+          await db.query(
+            `INSERT INTO v2_daily_settlement (day_key, user_id, player_name, marks_earned, lines_cleared, score, rank_daily, rank_cycle, beast_score, beast_event)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE marks_earned=VALUES(marks_earned), lines_cleared=VALUES(lines_cleared), score=VALUES(score), rank_daily=VALUES(rank_daily), rank_cycle=VALUES(rank_cycle), beast_score=VALUES(beast_score)`,
+            [state.v2.dayKey, player.id, entry.name, entry.score || 0, player.lines || 0, player.score || 0, i + 1, cycleRank >= 0 ? cycleRank + 1 : 0, beastEntry ? beastEntry.score : 0, cycle.activeBeastEvent || ""]
+          );
+        } catch (e) { /* 结算写入失败不影响游戏 */ }
+      }
+    }
+  }
 }
 
 function triggerWorldEvent() {
@@ -1691,12 +1851,54 @@ async function api(req, res) {
     const engravingBoost = 1 + upgradeLevel(player, "score") * 0.05;
     const oracleBoost = 1 + (Number(player.stats.oracleBattleBoost || 0) > 0 ? 0.15 : 0) + (Number(player.stats.oracleZodiacBoost || 0) > 0 ? 0.1 : 0);
     const marks = Math.round((lines * 100 + score * 0.12 + duration * (mode === "survival" ? 10 : 1)) * zodiacBoost * beastBoost * engravingBoost * oracleBoost);
-    if (Number(player.stats.oracleBattleBoost || 0) > 0) player.stats.oracleBattleBoost -= 1;
-    if (Number(player.stats.oracleZodiacBoost || 0) > 0) player.stats.oracleZodiacBoost -= 1;
-    player.coins += marks;
+    if (Number(player.stats.oracleBattleBoost || 0) > 0) {
+      player.stats.oracleBattleBoost -= 1;
+      if (player.stats.oracleBattleBoost === 0) {
+        pushMessage("情报验证", `${player.name} 的「战场情报」已耗尽——钟楼确认：情报有效，共带来额外刻痕增益`, "highlight", player.name);
+      }
+    }
+    if (Number(player.stats.oracleZodiacBoost || 0) > 0) {
+      player.stats.oracleZodiacBoost -= 1;
+      if (player.stats.oracleZodiacBoost === 0) {
+        pushMessage("情报验证", `${player.name} 的「生肖情报」已耗尽——规则之眼闭阖，情报闭环完成`, "highlight", player.name);
+      }
+    }
+    // 雾区持仓加成
+    const fogHoldings = (player.positions || []).filter((item) => item.type === "fog");
+    let fogBonusRate = 0;
+    const fogBonuses = [];
+    for (const pos of fogHoldings) {
+      const goods = state.v2.fogGoods.find((item) => item.id === pos.code);
+      if (!goods) continue;
+      if (goods.category === "神兽遗物") {
+        const beastMatch = (goods.name.includes("白虎") && cycle.activeBeastEvent === "白虎") || (goods.name.includes("朱雀") && cycle.activeBeastEvent === "朱雀") || (goods.name.includes("玄武") && cycle.activeBeastEvent === "玄武") || (goods.name.includes("青龙") && cycle.activeBeastEvent === "青龙");
+        if (beastMatch) { fogBonusRate += 0.4; fogBonuses.push(`${goods.name}（神兽契合+40%）`); }
+        else { fogBonusRate += 0.15; fogBonuses.push(`${goods.name}（神兽祝福+15%）`); }
+      }
+      if (goods.category === "生肖符咒") { fogBonusRate += 0.15; fogBonuses.push(`${goods.name}（生肖增幅+15%）`); }
+      if (goods.category === "规则碎片") { fogBonusRate += 0.08; fogBonuses.push(`${goods.name}（规则洞察+8%）`); }
+      if (goods.category === "钟楼零件") { fogBonusRate += 0.05; fogBonuses.push(`${goods.name}（钟楼共鸣+5%）`); }
+    }
+    const fogBonus = Math.round(marks * fogBonusRate);
+    const totalMarks = marks + fogBonus;
+    if (fogBonus > 0) {
+      pushMessage("雾区持仓", `${player.name} 持仓加成 +${fogBonus} 刻痕：${fogBonuses.join("、")}`, "system", "全城广播");
+    }
+    player.coins += totalMarks;
     player.score += score;
     player.lines += lines;
     player.stats.trials = Number(player.stats.trials || 0) + 1;
+    // 收集品解锁检测
+    const oldCollections = collectionsFor({ lines: player.lines - lines, score: player.score - score, shields: player.shields, titles: player.titles });
+    const newCollections = collectionsFor(player);
+    const newZodiacs = newCollections.zodiacMarks.filter(z => !oldCollections.zodiacMarks.includes(z));
+    const newBeasts = newCollections.beastMarks.filter(b => !oldCollections.beastMarks.includes(b));
+    if (newZodiacs.length > 0) {
+      pushMessage("铭刻之书", `${player.name} 解锁生肖铭刻：${newZodiacs.join("、")}`, "highlight", player.name);
+    }
+    if (newBeasts.length > 0) {
+      pushMessage("铭刻之书", `${player.name} 激活神兽铭刻：${newBeasts.join("、")}`, "highlight", player.name);
+    }
     state.v2.rankingSnapshots ||= [];
     state.v2.rankingSnapshots.unshift({
       dayKey: state.v2.dayKey,
@@ -1704,12 +1906,14 @@ async function api(req, res) {
       name: player.name,
       score,
       lines,
-      marks,
+      marks: totalMarks,
       mode,
+      beast: cycle.activeBeastEvent || "",
+      beastScore: fogBonuses.some((b) => b.includes("神兽契合")) ? totalMarks : (Number(state.v2.rankingSnapshots?.[0]?.beastScore) || 0),
       createdAt: new Date().toISOString()
     });
     state.v2.rankingSnapshots = state.v2.rankingSnapshots.slice(0, 200);
-    await addPactContribution(player, marks);
+    await addPactContribution(player, totalMarks);
     if (dbReady) {
       await db.query("INSERT INTO v2_trial_records (id, user_id, day_key, score, lines_cleared, duration_sec, mode, marks_earned) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [
         crypto.randomUUID(),
@@ -1719,12 +1923,22 @@ async function api(req, res) {
         lines,
         duration,
         mode,
-        marks
+        totalMarks
       ]);
     }
     await saveDbPlayer(player);
-    pushMessage("方块试炼", `${player.name} 刻下 ${marks} 道钟痕（${cycle.rulingZodiac}日加成）`, "system", "全城广播");
-    return sendJson(res, { success: true, data: { player, marksEarned: marks, cycle } });
+    const bonusText = fogBonus > 0 ? `（含雾区持仓 +${fogBonus}）` : "";
+    const maxClear = Math.max(0, Number(body.maxClear || 0));
+    if (maxClear >= 4) {
+      pushMessage("钟楼公告", `${player.name} 达成 ${maxClear} 行四消！钟声为证，全城铭刻`, "highlight", "全城广播");
+    }
+    // 跨系统连击检测
+    const hasOracleBoost = (Number(player.stats.oracleBattleBoost || 0) > 0 || Number(player.stats.oracleZodiacBoost || 0) > 0);
+    if (maxClear >= 4 && fogBonus > 0 && hasOracleBoost) {
+      pushMessage("三联回响", `${player.name} 触发雾区·情报·四消三联回响！钟楼为之一震`, "highlight", "全城广播");
+    }
+    pushMessage("方块试炼", `${player.name} 刻下 ${totalMarks} 道钟痕${bonusText}`, "system", "全城广播");
+    return sendJson(res, { success: true, data: { player, marksEarned: totalMarks, fogBonus, fogBonuses, cycle, maxClear } });
   }
   if (url.pathname === "/api/trials/history") {
     const player = await currentPlayer(req);
@@ -2197,7 +2411,19 @@ setInterval(moveFogMarket, 7000);
 setInterval(checkTrainArrivals, 15000);
 setInterval(() => {
   const npc = v2Npcs[Math.floor(Math.random() * v2Npcs.length)];
-  pushMessage(npc.name, npc.line, "npc", ["地虎", "青龙", "楚天秋", "列车长"].includes(npc.name) ? "全城广播" : "钟城广场");
+  if (!npc || !npc.lines) return;
+  const cycle = state.v2?.cycle || {};
+  const beast = cycle.activeBeastEvent || "";
+  const hour = new Date().getHours();
+  let category = "idle";
+  if (hour >= 5 && hour < 8) category = "dawn";
+  else if (hour >= 11 && hour < 14) category = "noon";
+  else if (hour >= 17 && hour < 20) category = "dusk";
+  else if (hour >= 22 || hour < 2) category = "night";
+  const beastKey = beast === "白虎" ? "beast_white_tiger" : beast === "朱雀" ? "beast_vermilion_bird" : beast === "玄武" ? "beast_black_tortoise" : beast === "青龙" ? "beast_azure_dragon" : null;
+  const pool = (beastKey && npc.lines[beastKey]) ? npc.lines[beastKey] : (npc.lines[category] || npc.lines.idle || [npc.line || "..."]);
+  const line = pool[Math.floor(Math.random() * pool.length)];
+  pushMessage(npc.name, line, "npc", ["地虎", "白虎", "青龙", "朱雀", "玄武", "楚天秋", "列车长", "钟楼守"].includes(npc.name) ? "全城广播" : "钟城广场");
 }, 9000);
 if (enableV1Jobs) {
   setInterval(() => {
