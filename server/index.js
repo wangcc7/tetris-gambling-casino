@@ -256,7 +256,7 @@ function seeded(seed) {
 }
 
 function cycleNow(now = new Date()) {
-  const start = Date.UTC(2026, 0, 1, 0, 0, 0);
+  const start = Date.UTC(2025, 11, 31, 16, 0, 0);
   const current = now.getTime();
   const dayMs = 24 * 60 * 60 * 1000;
   const elapsedDays = Math.max(0, Math.floor((current - start) / dayMs));
@@ -285,9 +285,7 @@ function trainScheduleFor(cycle = cycleNow()) {
   const start = new Date(cycle.dayStartedAt);
   return trainTemplates.map((item) => {
     const [hour, minute] = item.time.split(":").map(Number);
-    const at = new Date(start);
-    at.setUTCHours(hour - 8, minute, 0, 0);
-    if (at < start) at.setUTCDate(at.getUTCDate() + 1);
+    const at = new Date(start.getTime() + (hour * 60 + minute) * 60 * 1000);
     return { ...item, at: at.toISOString(), passed: Date.now() > at.getTime() };
   });
 }
