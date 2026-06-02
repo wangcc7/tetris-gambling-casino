@@ -610,6 +610,8 @@ function renderAll() {
   const nextTrain = state.v2.trains.find((train) => !train.passed) || state.v2.trains[0];
   $("#trainRail").textContent = `下一班列车：${nextTrain.name} ${nextTrain.time} | ${nextTrain.effect}`;
   $("#railBroadcast").textContent = state.messages[0] ? `${state.messages[0].author}：${state.messages[0].text}` : "钟楼仍在校准。";
+  const weather = state.external?.weather;
+  $("#systemMeta").textContent = `版本 ${state.version || "--"} · ${weather?.city || "济南"} ${weather?.text || "--"} ${weather?.temperature || ""}`.trim();
   $("#trialModeText").textContent = modeNames[trial.mode] || modeNames.standard;
   $("#trialMode").value = trial.mode;
   renderChronicle();

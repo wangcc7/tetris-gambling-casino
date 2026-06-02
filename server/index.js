@@ -13,7 +13,7 @@ const playerPort = Number(process.env.PLAYER_PORT || 8080);
 const adminPort = Number(process.env.ADMIN_PORT || 18052);
 const adminUser = process.env.ADMIN_USER || "root";
 const adminPassword = process.env.ADMIN_PASSWORD || "gambleMaster666";
-const appVersion = process.env.APP_VERSION || "0.8.0-v4";
+const appVersion = process.env.APP_VERSION || "0.9.1-v5";
 const enableV1Jobs = process.env.ENABLE_V1_JOBS === "1";
 const dbConfig = {
   host: process.env.DB_HOST || "127.0.0.1",
@@ -515,6 +515,28 @@ async function syncV2Database() {
     });
   }
   state.v2.pacts = pacts;
+
+  const [trialRows] = await db.query(`
+    SELECT tr.user_id, tr.score, tr.lines_cleared, tr.duration_sec, tr.mode, tr.marks_earned, tr.created_at, u.nickname
+    FROM v2_trial_records tr
+    LEFT JOIN users u ON u.id = REPLACE(tr.user_id, 'u-', '')
+    WHERE tr.day_key = ?
+    ORDER BY tr.created_at DESC
+    LIMIT 200
+  `, [dayKey]);
+  state.v2.rankingSnapshots = trialRows.map((row) => ({
+    dayKey,
+    userId: row.user_id,
+    name: row.nickname || row.user_id,
+    score: Number(row.score || 0),
+    lines: Number(row.lines_cleared || 0),
+    marks: Number(row.marks_earned || 0),
+    mode: row.mode,
+    zodiac: cycle.rulingZodiac,
+    beast: cycle.activeBeastEvent || "",
+    beastScore: cycle.activeBeastEvent ? Number(row.marks_earned || 0) : 0,
+    createdAt: row.created_at
+  }));
 }
 
 async function persistFogGoods(goods) {
@@ -832,7 +854,7 @@ async function getUserByToken(token) {
     LIMIT 1
   `, [token]);
   if (!rows[0]) return null;
-  return dbUserToPlayer(rows[0], await getPositions(rows[0].id));
+  return cachePlayer(dbUserToPlayer(rows[0], await getPositions(rows[0].id)));
 }
 
 async function getUserById(userId) {
@@ -840,7 +862,7 @@ async function getUserById(userId) {
   const cleanId = String(userId).replace(/^u-/, "");
   const [rows] = await db.query("SELECT * FROM users WHERE id = ? LIMIT 1", [cleanId]);
   if (!rows[0]) return null;
-  return dbUserToPlayer(rows[0], await getPositions(rows[0].id));
+  return cachePlayer(dbUserToPlayer(rows[0], await getPositions(rows[0].id)));
 }
 
 async function saveDbPlayer(player) {
@@ -866,6 +888,12 @@ function authFromReq(req, body = {}) {
   const header = req.headers.authorization || "";
   const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
   return body.sessionToken || bearer || parseCookies(req).casino_session || "";
+}
+
+function cachePlayer(player) {
+  if (!player?.id) return player;
+  state.players[player.id] = normalizePlayer({ ...(state.players[player.id] || {}), ...player });
+  return state.players[player.id];
 }
 
 async function currentPlayer(req, body = {}) {
@@ -1310,24 +1338,42 @@ function leaderboards() {
 function rankingsV2() {
   const players = Object.values(state.players);
   const snapshots = (state.v2.rankingSnapshots || []).filter((item) => item.dayKey === state.v2.dayKey);
-  const isEmpty = (arr) => !arr || arr.length === 0;
-  const rows = (mapper) => {
-    const data = players.map(mapper).filter((item) => Number(item.score || 0) > 0);
-    return data.sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 50).map((item, index) => ({ rank: index + 1, ...item }));
+  const finishRows = (data, emptyLabel) => {
+    let rows = data.filter((item) => Number(item.score || 0) > 0);
+    if (!rows.length) rows = [{ name: emptyLabel, score: 0, npc: true }];
+    else if (rows.length === 1) rows.push({ name: "钟楼告示", score: Math.max(0, Math.min(99, Number(rows[0].score || 0) - 1)), npc: true });
+    return rows
+      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+      .slice(0, 50)
+      .map((item, index) => ({ rank: index + 1, ...item }));
   };
-  const snapshotRows = (mapper) => {
-    const data = snapshots.map(mapper).filter((item) => Number(item.score || 0) > 0);
-    return data.sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 50).map((item, index) => ({ rank: index + 1, ...item }));
+  const rows = (mapper, emptyLabel) => finishRows(players.map(mapper), emptyLabel);
+  const snapshotRows = (mapper, emptyLabel) => {
+    const best = new Map();
+    for (const item of snapshots.map(mapper)) {
+      const key = item.userId || item.name;
+      const existing = best.get(key);
+      if (!existing || Number(item.score || 0) > Number(existing.score || 0)) best.set(key, item);
+    }
+    return finishRows([...best.values()], emptyLabel);
   };
-  const npcIntro = [{ name: "钟楼告示", score: 0 }];
+  const zodiacRows = () => {
+    const best = new Map();
+    for (const item of snapshots.filter((entry) => entry.zodiac)) {
+      const score = Number(item.lines || 0) * 1000 + Number(item.score || 0);
+      const existing = best.get(item.zodiac);
+      if (!existing || score > existing.score) best.set(item.zodiac, { userId: item.userId, name: `${item.zodiac}日 · ${item.name}`, score, zodiac: item.zodiac });
+    }
+    return finishRows([...best.values()], "暂无生肖铭刻");
+  };
 
   return {
-    daily_marks: snapshotRows((r) => ({ name: r.name, score: r.marks || r.score })),
-    daily_fog: rows((p) => ({ name: p.name, score: Math.max(0, p.coins - state.economy.initialCoins) })),
-    daily_pact: rows((p) => ({ name: p.name, score: Number(p.stats?.guildActions || 0) * 300 + p.lines * 10 })),
-    cycle_total: snapshotRows((r) => ({ name: r.name, score: r.score + r.marks })),
-    beast_hall: snapshotRows((r) => ({ name: r.name, score: Number(r.beastScore || 0), beast: r.beast || "" })),
-    zodiac_album: snapshotRows((r) => ({ name: r.name, score: r.lines * 1000 + r.score }))
+    daily_marks: snapshotRows((r) => ({ userId: r.userId, name: r.name, score: r.marks || r.score }), "暂无试炼刻痕"),
+    daily_fog: rows((p) => ({ userId: p.id, name: p.name, score: Math.max(0, Number(p.stats?.fogProfit || 0) + Number(p.coins || 0) - state.economy.initialCoins) }), "暂无雾区收益"),
+    daily_pact: rows((p) => ({ userId: p.id, name: p.name, score: Number(p.stats?.guildActions || 0) * 300 + Number(p.lines || 0) * 10 + Number(p.stats?.pactMarks || 0) }), "暂无契约贡献"),
+    cycle_total: rows((p) => ({ userId: p.id, name: p.name, score: Number(p.score || 0) + Number(p.lines || 0) * 40 + Number(p.stats?.historicMarks || 0) }), "暂无十日总分"),
+    beast_hall: snapshotRows((r) => ({ userId: r.userId, name: r.name, score: Number(r.beastScore || 0), beast: r.beast || "" }), "暂无神兽殿堂记录"),
+    zodiac_album: zodiacRows()
   };
 }
 
@@ -1404,6 +1450,7 @@ async function addPactContribution(player, marks) {
   const zodiacBoost = cycle.rulingZodiac === "羊" ? 2 : 1;
   const gain = Math.round(marks * zodiacBoost * (1 + upgradeLevel(player, "pact") * 0.05 + oracleBoost));
   if (oracleBoost) player.stats.oraclePactBoost -= 1;
+  player.stats.pactMarks = Number(player.stats.pactMarks || 0) + gain;
   member.contribution = Number(member.contribution || 0) + gain;
   pact.totalContribution = pact.members.reduce((sum, item) => sum + Number(item.contribution || 0), 0);
   pact.rewardPool = Math.round(pact.totalContribution * (pact.zodiacBonus === "羊" ? 0.2 : 0.1));
@@ -1426,7 +1473,7 @@ async function applyOracleEffect(player, card) {
   }
   if (type === "battle_hint") {
     player.stats.oracleBattleBoost = Number(player.stats.oracleBattleBoost || 0) + 3;
-    pushMessage("规则之眼", `${player.name} 获得战场情报「第七列」——未来 3 局，四消额外 +15% 刻痕`, "system", "全城广播");
+    pushMessage("规则之眼", `${player.name} 获得战场情报「第七列」——未来 3 局，首次四消额外 +500 刻痕`, "system", "全城广播");
   }
   if (type === "zodiac_hint") {
     player.stats.oracleZodiacBoost = Number(player.stats.oracleZodiacBoost || 0) + 3;
@@ -1846,16 +1893,21 @@ async function api(req, res) {
     const score = Math.max(0, Number(body.score || 0));
     const duration = Math.max(0, Number(body.duration || 0));
     const mode = String(body.mode || "normal");
+    const maxClear = Math.max(0, Number(body.maxClear || 0));
+    const battleBonus = Number(player.stats.oracleBattleBoost || 0) > 0 && maxClear >= 4 ? 500 : 0;
     const zodiacBoost = zodiacTrialBoost(cycle, body);
     const beastBoost = beastTrialBoost(cycle, body);
     const engravingBoost = 1 + upgradeLevel(player, "score") * 0.05;
-    const oracleBoost = 1 + (Number(player.stats.oracleBattleBoost || 0) > 0 ? 0.15 : 0) + (Number(player.stats.oracleZodiacBoost || 0) > 0 ? 0.1 : 0);
-    const marks = Math.round((lines * 100 + score * 0.12 + duration * (mode === "survival" ? 10 : 1)) * zodiacBoost * beastBoost * engravingBoost * oracleBoost);
+    const oracleBoost = 1 + (Number(player.stats.oracleZodiacBoost || 0) > 0 ? 0.1 : 0);
+    const marks = Math.round((lines * 100 + score * 0.12 + duration * (mode === "survival" ? 10 : 1) + battleBonus) * zodiacBoost * beastBoost * engravingBoost * oracleBoost);
     if (Number(player.stats.oracleBattleBoost || 0) > 0) {
       player.stats.oracleBattleBoost -= 1;
       if (player.stats.oracleBattleBoost === 0) {
         pushMessage("情报验证", `${player.name} 的「战场情报」已耗尽——钟楼确认：情报有效，共带来额外刻痕增益`, "highlight", player.name);
       }
+    }
+    if (battleBonus > 0) {
+      pushMessage("情报验证", `${player.name} 的「第七列」应验：首次四消额外 +500 刻痕`, "highlight", "战场");
     }
     if (Number(player.stats.oracleZodiacBoost || 0) > 0) {
       player.stats.oracleZodiacBoost -= 1;
@@ -1888,6 +1940,7 @@ async function api(req, res) {
     player.score += score;
     player.lines += lines;
     player.stats.trials = Number(player.stats.trials || 0) + 1;
+    player.stats.historicMarks = Number(player.stats.historicMarks || 0) + totalMarks;
     // 收集品解锁检测
     const oldCollections = collectionsFor({ lines: player.lines - lines, score: player.score - score, shields: player.shields, titles: player.titles });
     const newCollections = collectionsFor(player);
@@ -1908,6 +1961,7 @@ async function api(req, res) {
       lines,
       marks: totalMarks,
       mode,
+      zodiac: cycle.rulingZodiac,
       beast: cycle.activeBeastEvent || "",
       beastScore: fogBonuses.some((b) => b.includes("神兽契合")) ? totalMarks : (Number(state.v2.rankingSnapshots?.[0]?.beastScore) || 0),
       createdAt: new Date().toISOString()
@@ -1928,7 +1982,6 @@ async function api(req, res) {
     }
     await saveDbPlayer(player);
     const bonusText = fogBonus > 0 ? `（含雾区持仓 +${fogBonus}）` : "";
-    const maxClear = Math.max(0, Number(body.maxClear || 0));
     if (maxClear >= 4) {
       pushMessage("钟楼公告", `${player.name} 达成 ${maxClear} 行四消！钟声为证，全城铭刻`, "highlight", "全城广播");
     }
@@ -2016,7 +2069,7 @@ async function api(req, res) {
     if (player.coins < cost) return sendJson(res, { success: false, error: "刻痕不足" }, 400);
     player.coins -= cost;
     player.stats.trades = Number(player.stats.trades || 0) + 1;
-    if (dbReady) await db.query("INSERT INTO user_positions (user_id, type, code, qty, cost, entry) VALUES (?, ?, ?, ?, ?, ?)", [player.userId, "fog", goods.id, String(quantity), cost, goods.currentPrice]);
+    if (dbReady) await db.query("INSERT INTO user_positions (user_id, type, code, side, qty, cost, entry) VALUES (?, ?, ?, ?, ?, ?, ?)", [player.userId, "fog", goods.id, goods.category, String(quantity), cost, goods.currentPrice]);
     await saveDbPlayer(player);
     pushMessage("雾区交易所", `${player.name} 买入 ${goods.name} x${quantity}，列车已经记录这笔可能`, "system", "全城广播");
     const fresh = await getUserById(player.userId);
@@ -2035,6 +2088,7 @@ async function api(req, res) {
     const feeRate = Math.max(0.01, (5 - upgradeLevel(player, "fee")) / 100);
     const income = Math.round((goods?.currentPrice || Number(position.entry || 0)) * Number(position.qty || 1) * (1 - feeRate));
     player.coins += income;
+    player.stats.fogProfit = Number(player.stats.fogProfit || 0) + Math.round(income - Number(position.cost || 0));
     if (dbReady) await db.query("DELETE FROM user_positions WHERE id = ? AND user_id = ?", [position.id, player.userId]);
     await saveDbPlayer(player);
     pushMessage("雾区交易所", `${player.name} 卖出 ${goods?.name || position.code}，收回 ${income} 刻痕`, "system", "全城广播");

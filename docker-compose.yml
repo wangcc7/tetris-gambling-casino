@@ -34,6 +34,6 @@ services:
       DB_USER: casino
       DB_PASSWORD: casinoPass666
       DB_NAME: tetris_casino
-      APP_VERSION: 0.8.0-v4
+      APP_VERSION: 0.9.1-v5
     volumes:
       - ./data:/app/data
